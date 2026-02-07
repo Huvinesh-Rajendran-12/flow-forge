@@ -10,6 +10,7 @@ from ..workflow.executor import WorkflowExecutor
 from ..workflow.schema import Workflow
 from ..workflow.store import WorkflowStore
 from .base import run_agent
+from .test_agent import test_workflow
 from .tools import create_flowforge_mcp_server
 
 WORKFLOW_SCHEMA_DESCRIPTION = """\
@@ -209,6 +210,7 @@ async def generate_workflow(
         Message dicts with type and content
     """
     workspace = tempfile.mkdtemp(prefix="flowforge-")
+    workflow_path = Path(workspace) / "workflow.py"
 
     # Create MCP server with team-scoped tools
     mcp_server = create_flowforge_mcp_server(team=team)
@@ -253,8 +255,51 @@ async def generate_workflow(
     ):
         yield message
 
-    # Parse the generated workflow.json and execute it
     workflow_file = Path(workspace) / "workflow.json"
+
+    if workflow_path.exists():
+        result = await test_workflow(str(workflow_path))
+
+        yield {
+            "type": "test_result",
+            "content": {
+                "passed": result.passed,
+                "output": result.output,
+                "error": result.error,
+                "execution_time": result.execution_time,
+            },
+        }
+
+        if not result.passed:
+            yield {
+                "type": "text",
+                "content": "Initial test failed. Running self-correction with error feedback...",
+            }
+
+            fix_prompt = f"The workflow test failed with the following error:\n\n{result.error}\n\nPlease fix the workflow.py code to resolve this error and test it again. You can edit the workflow.py file and re-run it to verify the fix."
+
+            async for message in run_agent(
+                prompt=fix_prompt,
+                system_prompt=system_prompt,
+                workspace_dir=workspace,
+                allowed_tools=["Read", "Write", "Edit", "Bash", "Glob"],
+                max_turns=15,
+            ):
+                yield message
+
+            result = await test_workflow(str(workflow_path))
+
+            yield {
+                "type": "test_result",
+                "content": {
+                    "passed": result.passed,
+                    "output": result.output,
+                    "error": result.error,
+                    "execution_time": result.execution_time,
+                    "is_retry": True,
+                },
+            }
+
     if workflow_file.exists():
         try:
             workflow_data = json.loads(workflow_file.read_text())
@@ -265,7 +310,6 @@ async def generate_workflow(
                 "content": workflow.model_dump(),
             }
 
-            # Execute against the simulator
             state, trace, services, failure_config = create_simulator()
             executor = WorkflowExecutor(
                 state=state,
@@ -283,7 +327,6 @@ async def generate_workflow(
                 },
             }
 
-            # Save workflow after successful execution
             if workflow_store and report.failed == 0:
                 workflow_store.save(workflow)
                 yield {
@@ -296,8 +339,6 @@ async def generate_workflow(
                 }
         except Exception as e:
             yield {"type": "error", "content": f"Failed to parse/execute workflow: {e}"}
-    else:
-        yield {"type": "error", "content": "Agent did not produce workflow.json"}
 
     yield {
         "type": "workspace",
