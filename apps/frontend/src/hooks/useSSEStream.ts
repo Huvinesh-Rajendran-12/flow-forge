@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useWorkflowStore } from '../store/workflowStore';
 import { Message } from '../types/api';
-import { extractWorkflowFromToolUse, parseWorkflowCode } from '../utils/workflowParser';
+import { extractWorkflowFromToolUse, parseWorkflowCode, parseWorkflowJSON } from '../utils/workflowParser';
 
 export function useSSEStream() {
   const { addMessage, setStreaming, setWorkflowGraph, reset } = useWorkflowStore();
@@ -68,6 +68,14 @@ export function useSSEStream() {
                     if (graph.nodes.length > 0) {
                       setWorkflowGraph(graph);
                     }
+                  }
+                }
+
+                // Handle workflow message type from backend
+                if (message.type === 'workflow') {
+                  const graph = parseWorkflowJSON(message.content);
+                  if (graph.nodes.length > 0) {
+                    setWorkflowGraph(graph);
                   }
                 }
               } catch (error) {
