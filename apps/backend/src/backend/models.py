@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 
 class WorkflowRequest(BaseModel):
-    """Request to generate a workflow."""
+    """Request to generate or modify a workflow."""
 
     description: str = Field(
         ..., description="Natural language description of the desired workflow"
@@ -13,6 +13,14 @@ class WorkflowRequest(BaseModel):
     context: Optional[dict[str, Any]] = Field(
         None,
         description="Additional context (e.g., employee name, department, systems)",
+    )
+    team: str = Field(
+        "default",
+        description="Team whose knowledge base to use",
+    )
+    workflow_id: Optional[str] = Field(
+        None,
+        description="If provided, modify this existing workflow instead of creating new",
     )
 
 

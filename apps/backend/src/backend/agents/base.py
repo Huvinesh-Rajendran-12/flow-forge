@@ -18,14 +18,31 @@ from ..config import get_settings
 KB_DIR = Path(__file__).resolve().parents[3] / "kb"
 
 
-def load_knowledge_base() -> str:
-    """Load all markdown files from the knowledge base directory."""
-    if not KB_DIR.exists():
+def load_knowledge_base(team: str = "default") -> str:
+    """Load all markdown files from the knowledge base directory.
+
+    Loads from the team-specific folder, falling back to default/ for
+    any files the team folder doesn't override.
+    """
+    default_dir = KB_DIR / "default"
+    team_dir = KB_DIR / team
+
+    if not default_dir.exists():
         return ""
+
+    # Collect files: start with defaults, override with team-specific
+    files: dict[str, Path] = {}
+    for md_file in sorted(default_dir.glob("*.md")):
+        files[md_file.name] = md_file
+
+    if team != "default" and team_dir.exists():
+        for md_file in sorted(team_dir.glob("*.md")):
+            files[md_file.name] = md_file
+
     sections = []
-    for md_file in sorted(KB_DIR.glob("*.md")):
-        content = md_file.read_text()
-        sections.append(f"## {md_file.stem.replace('_', ' ').title()}\n\n{content}")
+    for name in sorted(files):
+        content = files[name].read_text()
+        sections.append(f"## {name.removesuffix('.md').replace('_', ' ').title()}\n\n{content}")
     return "\n\n---\n\n".join(sections)
 
 
@@ -35,6 +52,7 @@ async def run_agent(
     workspace_dir: str,
     allowed_tools: Optional[list[str]] = None,
     max_turns: int = 50,
+    mcp_servers: Optional[dict] = None,
 ) -> AsyncGenerator[dict[str, Any], None]:
     """Run a Claude Agent SDK agent and yield messages as they arrive.
 
@@ -54,6 +72,7 @@ async def run_agent(
         max_turns=max_turns,
         permission_mode="bypassPermissions",
         cwd=workspace_dir,
+        mcp_servers=mcp_servers or {},
     )
 
     try:
