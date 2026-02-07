@@ -75,8 +75,17 @@ async def run_agent(
         mcp_servers=mcp_servers or {},
     )
 
+    # MCP tools require streaming input mode (async generator)
+    async def _streaming_prompt():
+        yield {
+            "type": "user",
+            "message": {"role": "user", "content": prompt},
+        }
+
+    prompt_input = _streaming_prompt() if mcp_servers else prompt
+
     try:
-        async for message in query(prompt=prompt, options=options):
+        async for message in query(prompt=prompt_input, options=options):
             if isinstance(message, AssistantMessage):
                 for block in message.content:
                     if isinstance(block, TextBlock):
