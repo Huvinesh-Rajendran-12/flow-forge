@@ -1,4 +1,4 @@
-export type MessageType = 'text' | 'tool_use' | 'tool_result' | 'result' | 'error' | 'workspace' | 'workflow' | 'execution_report' | 'workflow_saved';
+export type MessageType = 'text' | 'tool_use' | 'tool_result' | 'result' | 'error' | 'workspace' | 'workflow' | 'execution_report' | 'workflow_saved' | 'user_message';
 
 export interface BaseMessage {
   id: string;
@@ -37,7 +37,13 @@ export interface ResultMessage extends BaseMessage {
       input_tokens?: number;
       output_tokens?: number;
     };
+    session_id?: string;
   };
+}
+
+export interface UserMessage extends BaseMessage {
+  type: 'user_message';
+  content: string;
 }
 
 export interface ErrorMessage extends BaseMessage {
@@ -122,8 +128,11 @@ export type Message =
   | WorkspaceMessage
   | WorkflowMessage
   | ExecutionReportMessage
-  | WorkflowSavedMessage;
+  | WorkflowSavedMessage
+  | UserMessage;
 
 export interface GenerateWorkflowRequest {
   description: string;
+  workflow_id?: string;
+  session_id?: string;
 }
