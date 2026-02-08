@@ -296,6 +296,12 @@ async def generate_workflow(
             if attempt > MAX_FIX_ATTEMPTS:
                 break
 
+            yield {
+                "type": "text",
+                "content": f"Parse error in workflow.json. "
+                f"Running self-correction (attempt {attempt}/{MAX_FIX_ATTEMPTS})...",
+            }
+
             async for message in run_agent(
                 prompt=(
                     f"The workflow.json file at {workflow_file} failed to parse "
