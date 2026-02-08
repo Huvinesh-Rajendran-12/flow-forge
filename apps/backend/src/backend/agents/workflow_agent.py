@@ -12,6 +12,27 @@ from ..workflow.store import WorkflowStore
 from .base import run_agent
 from .tools import create_flowforge_mcp_server
 
+MAX_FIX_ATTEMPTS = 2
+
+FIX_SYSTEM_PROMPT = """\
+You are FlowForge, an AI agent that fixes workflow JSON files.
+
+You will be given an execution report showing which workflow nodes failed and why.
+Read the existing workflow.json, diagnose the issue, fix it, and write the corrected file back.
+
+{schema_description}
+
+## Available Tools
+- **search_apis**: Search available service APIs to find correct actions and parameters
+- **search_knowledge_base**: Search the organization's knowledge base for policies and procedures
+
+## Rules
+- Only modify what is necessary to fix the reported failures
+- Use search_apis to verify correct service actions and parameter names
+- Ensure all node dependencies remain valid
+- The edges array must mirror the depends_on relationships
+"""
+
 WORKFLOW_SCHEMA_DESCRIPTION = """\
 The workflow JSON must conform to this schema:
 
@@ -209,8 +230,8 @@ async def generate_workflow(
         Message dicts with type and content
     """
     workspace = tempfile.mkdtemp(prefix="flowforge-")
+    workflow_file = Path(workspace) / "workflow.json"
 
-    # Create MCP server with team-scoped tools
     mcp_server = create_flowforge_mcp_server(team=team)
 
     if existing_workflow:
@@ -253,53 +274,107 @@ async def generate_workflow(
     ):
         yield message
 
-    # Parse the generated workflow.json and execute it
-    workflow_file = Path(workspace) / "workflow.json"
-    if workflow_file.exists():
+    if not workflow_file.exists():
+        yield {"type": "error", "content": "Agent did not produce workflow.json"}
+        yield {"type": "workspace", "content": {"path": workspace}}
+        return
+
+    fix_system_prompt = FIX_SYSTEM_PROMPT.format(
+        schema_description=WORKFLOW_SCHEMA_DESCRIPTION,
+    )
+
+    report = None
+    for attempt in range(1, MAX_FIX_ATTEMPTS + 2):
         try:
             workflow_data = json.loads(workflow_file.read_text())
             workflow = Workflow.model_validate(workflow_data)
-
-            yield {
-                "type": "workflow",
-                "content": workflow.model_dump(),
-            }
-
-            # Execute against the simulator
-            state, trace, services, failure_config = create_simulator()
-            executor = WorkflowExecutor(
-                state=state,
-                trace=trace,
-                services=services,
-                failure_config=failure_config,
-            )
-            report = await executor.execute(workflow)
-
-            yield {
-                "type": "execution_report",
-                "content": {
-                    "report": report.to_dict(),
-                    "markdown": report.to_markdown(),
-                },
-            }
-
-            # Save workflow after successful execution
-            if workflow_store and report.failed == 0:
-                workflow_store.save(workflow)
-                yield {
-                    "type": "workflow_saved",
-                    "content": {
-                        "workflow_id": workflow.id,
-                        "team": workflow.team,
-                        "version": workflow.version,
-                    },
-                }
         except Exception as e:
-            yield {"type": "error", "content": f"Failed to parse/execute workflow: {e}"}
-    else:
-        yield {"type": "error", "content": "Agent did not produce workflow.json"}
+            yield {
+                "type": "error",
+                "content": f"Failed to parse workflow.json (attempt {attempt}): {e}",
+            }
+            if attempt > MAX_FIX_ATTEMPTS:
+                break
 
-    yield {
-        "type": "workspace",
-        "content": {"path": workspace},
-    }
+            async for message in run_agent(
+                prompt=(
+                    f"The workflow.json file at {workflow_file} failed to parse "
+                    f"with the following error:\n\n{e}\n\n"
+                    f"Read the file, fix the JSON, and write it back."
+                ),
+                system_prompt=fix_system_prompt,
+                workspace_dir=workspace,
+                allowed_tools=[
+                    "Read", "Write", "Edit",
+                    "mcp__flowforge__search_apis",
+                    "mcp__flowforge__search_knowledge_base",
+                ],
+                max_turns=10,
+                mcp_servers={"flowforge": mcp_server},
+            ):
+                yield message
+            continue
+
+        yield {"type": "workflow", "content": workflow.model_dump()}
+
+        state, trace, services, failure_config = create_simulator()
+        executor = WorkflowExecutor(
+            state=state,
+            trace=trace,
+            services=services,
+            failure_config=failure_config,
+        )
+        report = await executor.execute(workflow)
+
+        yield {
+            "type": "execution_report",
+            "content": {
+                "report": report.to_dict(),
+                "markdown": report.to_markdown(),
+                "attempt": attempt,
+            },
+        }
+
+        if report.failed == 0:
+            break
+
+        if attempt > MAX_FIX_ATTEMPTS:
+            break
+
+        yield {
+            "type": "text",
+            "content": f"Execution had {report.failed} failure(s). "
+            f"Running self-correction (attempt {attempt}/{MAX_FIX_ATTEMPTS})...",
+        }
+
+        async for message in run_agent(
+            prompt=(
+                f"The workflow at {workflow_file} was executed but had failures.\n\n"
+                f"## Execution Report\n\n{report.to_markdown()}\n\n"
+                f"Read the workflow.json, fix the issues described above, "
+                f"and write the corrected file back."
+            ),
+            system_prompt=fix_system_prompt,
+            workspace_dir=workspace,
+            allowed_tools=[
+                "Read", "Write", "Edit",
+                "mcp__flowforge__search_apis",
+                "mcp__flowforge__search_knowledge_base",
+            ],
+            max_turns=10,
+            mcp_servers={"flowforge": mcp_server},
+        ):
+            yield message
+
+    if workflow_store and report and report.failed == 0:
+        workflow_store.save(workflow)
+        yield {
+            "type": "workflow_saved",
+            "content": {
+                "workflow_id": workflow.id,
+                "team": workflow.team,
+                "version": workflow.version,
+            },
+        }
+
+    yield {"type": "workspace", "content": {"path": workspace}}

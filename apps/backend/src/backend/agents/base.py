@@ -9,6 +9,7 @@ from claude_agent_sdk import (
     ClaudeAgentOptions,
     ResultMessage,
     TextBlock,
+    ToolResultBlock,
     ToolUseBlock,
     query,
 )
@@ -96,6 +97,16 @@ async def run_agent(
                             "content": {
                                 "tool": block.name,
                                 "input": getattr(block, "input", {}),
+                                "id": getattr(block, "id", None),
+                            },
+                        }
+                    elif isinstance(block, ToolResultBlock):
+                        yield {
+                            "type": "tool_result",
+                            "content": {
+                                "tool_use_id": block.tool_use_id,
+                                "result": block.content,
+                                "is_error": block.is_error or False,
                             },
                         }
             elif isinstance(message, ResultMessage):

@@ -611,10 +611,18 @@ async def test_agent_generation():
                 tool = content["tool"]
                 inp = content.get("input", {})
                 detail = inp.get("file_path") or inp.get("command", "")
+                tool_id = content.get("id", "")
                 if detail:
-                    print(f"  [tool]  {tool}: {str(detail)[:100]}")
+                    print(f"  [tool]  {tool}: {str(detail)[:100]} (id: {tool_id})")
                 else:
-                    print(f"  [tool]  {tool}")
+                    print(f"  [tool]  {tool} (id: {tool_id})")
+            elif msg_type == "tool_result":
+                tool_use_id = content.get("tool_use_id", "")
+                is_error = content.get("is_error", False)
+                result = content.get("result", "")
+                result_str = str(result)[:100] if result else "(empty)"
+                status = "[ERROR]" if is_error else "[OK]"
+                print(f"  [result] {status} {tool_use_id}: {result_str}")
             elif msg_type == "workflow":
                 workflow_data = content
                 print(
