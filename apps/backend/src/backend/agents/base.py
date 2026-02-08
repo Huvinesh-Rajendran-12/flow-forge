@@ -121,5 +121,9 @@ async def run_agent(
                         "session_id": message.session_id,
                     },
                 }
-    except Exception as e:
-        yield {"type": "error", "content": str(e)}
+    except BaseException as e:
+        if isinstance(e, BaseExceptionGroup):
+            msgs = [str(exc) for exc in e.exceptions]
+            yield {"type": "error", "content": "; ".join(msgs) or str(e)}
+        else:
+            yield {"type": "error", "content": str(e)}

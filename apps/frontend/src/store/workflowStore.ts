@@ -164,8 +164,6 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       nodeStatuses: {} as Record<string, ExecutionStatus>,
       executionReports: [] as ExecutionReportMessage[],
       correctionAttempt: 0,
-      // Preserve: messages, sessionId, currentWorkflowId, workflowGraph,
-      // workflowMetadata, costUsd, totalTokens, workflowSaved
     }),
 }));
 

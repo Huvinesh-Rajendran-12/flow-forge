@@ -234,10 +234,7 @@ async def generate_workflow(
     workspace = tempfile.mkdtemp(prefix="flowforge-")
     workflow_file = Path(workspace) / "workflow.json"
 
-    mcp_server = create_flowforge_mcp_server(team=team)
-
     if session_id:
-        # Follow up turn: the resumed session already has the system prompt
         prompt = (
             f"New workspace directory: {workspace}\n"
             f"Write all files there using absolute paths (e.g., {workspace}/workflow.json).\n\n"
@@ -281,20 +278,31 @@ async def generate_workflow(
             for key, value in context.items():
                 prompt += f"- {key}: {value}\n"
 
-    async for message in run_agent(
-        prompt=prompt,
-        system_prompt=system_prompt,
-        workspace_dir=workspace,
-        allowed_tools=[
-            "Read", "Write", "Edit", "Bash", "Glob",
-            "mcp__flowforge__search_apis",
-            "mcp__flowforge__search_knowledge_base",
-        ],
-        max_turns=30,
-        mcp_servers={"flowforge": mcp_server},
-        session_id=session_id,
-    ):
-        yield message
+    if session_id:
+        async for message in run_agent(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            workspace_dir=workspace,
+            allowed_tools=["Read", "Write", "Edit", "Bash", "Glob"],
+            max_turns=30,
+            session_id=session_id,
+        ):
+            yield message
+    else:
+        mcp_server = create_flowforge_mcp_server(team=team)
+        async for message in run_agent(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            workspace_dir=workspace,
+            allowed_tools=[
+                "Read", "Write", "Edit", "Bash", "Glob",
+                "mcp__flowforge__search_apis",
+                "mcp__flowforge__search_knowledge_base",
+            ],
+            max_turns=30,
+            mcp_servers={"flowforge": mcp_server},
+        ):
+            yield message
 
     if not workflow_file.exists():
         yield {"type": "error", "content": "Agent did not produce workflow.json"}
@@ -304,6 +312,7 @@ async def generate_workflow(
     fix_system_prompt = FIX_SYSTEM_PROMPT.format(
         schema_description=WORKFLOW_SCHEMA_DESCRIPTION,
     )
+    fix_mcp_server = create_flowforge_mcp_server(team=team)
 
     report = None
     for attempt in range(1, MAX_FIX_ATTEMPTS + 2):
@@ -338,7 +347,7 @@ async def generate_workflow(
                     "mcp__flowforge__search_knowledge_base",
                 ],
                 max_turns=10,
-                mcp_servers={"flowforge": mcp_server},
+                mcp_servers={"flowforge": fix_mcp_server},
             ):
                 yield message
             continue
@@ -390,7 +399,7 @@ async def generate_workflow(
                 "mcp__flowforge__search_knowledge_base",
             ],
             max_turns=10,
-            mcp_servers={"flowforge": mcp_server},
+            mcp_servers={"flowforge": fix_mcp_server},
         ):
             yield message
 

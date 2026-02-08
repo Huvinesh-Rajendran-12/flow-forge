@@ -11,9 +11,7 @@ export function useSSEStream() {
       const { sessionId, currentWorkflowId } = useWorkflowStore.getState();
 
       if (sessionId) {
-        // Follow-up turn: preserve conversation history
         softReset();
-        // Inject a user message into the stream for display
         const userMessage: UserMessage = {
           id: crypto.randomUUID(),
           timestamp: Date.now(),
@@ -22,7 +20,6 @@ export function useSSEStream() {
         };
         addMessage(userMessage);
       } else {
-        // First message: full reset
         reset();
       }
 
@@ -133,6 +130,9 @@ export function useSSEStream() {
           content: error instanceof Error ? error.message : 'Unknown error occurred',
         };
         addMessage(errorMessage);
+        if (sessionId) {
+          useWorkflowStore.setState({ sessionId: null });
+        }
       } finally {
         setStreaming(false);
       }
