@@ -11,11 +11,14 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         className={cn(
-          'px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+          'px-4 py-2 rounded font-mono text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed',
           {
-            'bg-blue-600 text-white hover:bg-blue-700': variant === 'primary',
-            'bg-gray-200 text-gray-900 hover:bg-gray-300': variant === 'secondary',
-            'bg-transparent text-gray-700 hover:bg-gray-100': variant === 'ghost',
+            'bg-terminal-green text-terminal-bg hover:shadow-[0_0_10px_rgba(0,255,65,0.3)] active:bg-terminal-green-muted':
+              variant === 'primary',
+            'bg-transparent text-terminal-green border border-dashed border-terminal-green hover:bg-terminal-green/10':
+              variant === 'secondary',
+            'bg-transparent text-terminal-green-muted hover:text-terminal-green hover:bg-terminal-card':
+              variant === 'ghost',
           },
           className
         )}

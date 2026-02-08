@@ -2,7 +2,7 @@ import { HTMLAttributes, forwardRef } from 'react';
 import { cn } from '../../utils/cn';
 
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
-  variant?: 'default' | 'success' | 'error' | 'warning';
+  variant?: 'default' | 'success' | 'error' | 'warning' | 'running';
 }
 
 export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
@@ -11,12 +11,13 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
       <span
         ref={ref}
         className={cn(
-          'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
+          'inline-flex items-center px-2 py-0.5 rounded text-xs font-mono border border-dotted',
           {
-            'bg-gray-100 text-gray-800': variant === 'default',
-            'bg-green-100 text-green-800': variant === 'success',
-            'bg-red-100 text-red-800': variant === 'error',
-            'bg-yellow-100 text-yellow-800': variant === 'warning',
+            'border-terminal-border text-terminal-text-dim bg-terminal-card': variant === 'default',
+            'border-terminal-green-dim text-terminal-green-muted bg-terminal-green-dim/20': variant === 'success',
+            'border-red-900 text-terminal-red bg-red-950/50': variant === 'error',
+            'border-yellow-900 text-terminal-yellow bg-yellow-950/50': variant === 'warning',
+            'border-cyan-900 text-terminal-cyan bg-cyan-950/50 animate-pulse-green': variant === 'running',
           },
           className
         )}
