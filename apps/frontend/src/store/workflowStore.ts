@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Message, ExecutionReportMessage } from '../types/api';
+import { Message, ExecutionReportMessage, UserMessage } from '../types/api';
 import { WorkflowGraph, WorkflowMetadata, ExecutionStatus } from '../types/workflow';
 
 export type AgentPhase = 'idle' | 'searching' | 'building' | 'executing' | 'self_correcting' | 'complete' | 'error';
@@ -16,6 +16,8 @@ interface WorkflowState {
   executionReports: ExecutionReportMessage[];
   correctionAttempt: number;
   workflowSaved: { workflow_id: string; team: string; version: number } | null;
+  sessionId: string | null;
+  currentWorkflowId: string | null;
 
   // Actions
   addMessage: (message: Message) => void;
@@ -24,6 +26,7 @@ interface WorkflowState {
   setNodeStatuses: (statuses: Record<string, ExecutionStatus> | ((prev: Record<string, ExecutionStatus>) => Record<string, ExecutionStatus>)) => void;
   setAgentPhase: (phase: AgentPhase) => void;
   reset: () => void;
+  softReset: () => void;
 }
 
 function detectPhase(message: Message, currentPhase: AgentPhase): AgentPhase {
@@ -55,10 +58,10 @@ function detectPhase(message: Message, currentPhase: AgentPhase): AgentPhase {
 }
 
 const initialState = {
-  messages: [],
+  messages: [] as Message[],
   isStreaming: false,
-  workflowGraph: null,
-  workflowMetadata: { stepCount: 0 },
+  workflowGraph: null as WorkflowGraph | null,
+  workflowMetadata: { stepCount: 0 } as WorkflowMetadata,
   costUsd: 0,
   totalTokens: 0,
   agentPhase: 'idle' as AgentPhase,
@@ -66,6 +69,8 @@ const initialState = {
   executionReports: [] as ExecutionReportMessage[],
   correctionAttempt: 0,
   workflowSaved: null as { workflow_id: string; team: string; version: number } | null,
+  sessionId: null as string | null,
+  currentWorkflowId: null as string | null,
 };
 
 export const useWorkflowStore = create<WorkflowState>((set) => ({
@@ -97,8 +102,11 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       };
 
       if (message.type === 'result') {
-        updates.costUsd = message.content.cost_usd;
-        updates.totalTokens = message.content.usage.total_tokens;
+        updates.costUsd = state.costUsd + (message.content.cost_usd ?? 0);
+        updates.totalTokens = state.totalTokens + (message.content.usage.total_tokens ?? 0);
+        if (message.content.session_id) {
+          updates.sessionId = message.content.session_id;
+        }
       }
 
       if (message.type === 'workspace') {
@@ -114,6 +122,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
 
       if (message.type === 'workflow_saved') {
         updates.workflowSaved = message.content;
+        updates.currentWorkflowId = message.content.workflow_id;
       }
 
       return updates;
@@ -147,11 +156,22 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   setAgentPhase: (phase) => set({ agentPhase: phase }),
 
   reset: () => set(initialState),
+
+  softReset: () =>
+    set({
+      isStreaming: false,
+      agentPhase: 'idle' as AgentPhase,
+      nodeStatuses: {} as Record<string, ExecutionStatus>,
+      executionReports: [] as ExecutionReportMessage[],
+      correctionAttempt: 0,
+      // Preserve: messages, sessionId, currentWorkflowId, workflowGraph,
+      // workflowMetadata, costUsd, totalTokens, workflowSaved
+    }),
 }));
 
 // Selectors
 export const selectAgentMessages = (state: WorkflowState) =>
-  state.messages.filter((m) => m.type === 'text' || m.type === 'error');
+  state.messages.filter((m) => m.type === 'text' || m.type === 'error' || m.type === 'user_message');
 
 export const selectToolMessages = (state: WorkflowState) =>
   state.messages.filter((m) => m.type === 'tool_use');
