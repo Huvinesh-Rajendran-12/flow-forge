@@ -1,24 +1,37 @@
 import { useWorkflowStore, selectAgentMessages } from '../../store/workflowStore';
 import { useAutoScroll } from '../../hooks/useAutoScroll';
-import { TextMessage, ErrorMessage } from '../../types/api';
+import { TextMessage, ErrorMessage, UserMessage } from '../../types/api';
 import { PhaseIndicator } from './PhaseIndicator';
 import { AgentMessageItem } from './AgentMessageItem';
 import { AgentInput } from './AgentInput';
 
 export function AgentStreamPanel() {
   const agentMessages = useWorkflowStore(selectAgentMessages);
+  const sessionId = useWorkflowStore((state) => state.sessionId);
+  const reset = useWorkflowStore((state) => state.reset);
+  const isStreaming = useWorkflowStore((state) => state.isStreaming);
   const scrollRef = useAutoScroll<HTMLDivElement>([agentMessages.length]);
 
   return (
     <div className="h-full flex flex-col bg-terminal-panel border-r border-dashed border-terminal-border">
       {/* Header */}
-      <div className="border-b border-dashed border-terminal-border px-4 py-3">
-        <h1 className="text-sm font-mono font-bold text-terminal-green tracking-widest">
-          FLOWFORGE
-        </h1>
-        <p className="text-[10px] font-mono text-terminal-text-dim mt-0.5">
-          agent stream
-        </p>
+      <div className="border-b border-dashed border-terminal-border px-4 py-3 flex items-center justify-between">
+        <div>
+          <h1 className="text-sm font-mono font-bold text-terminal-green tracking-widest">
+            FLOWFORGE
+          </h1>
+          <p className="text-[10px] font-mono text-terminal-text-dim mt-0.5">
+            agent stream
+          </p>
+        </div>
+        {sessionId && !isStreaming && (
+          <button
+            onClick={reset}
+            className="text-[10px] font-mono text-terminal-text-dim hover:text-terminal-green border border-dashed border-terminal-border px-2 py-1 transition-colors"
+          >
+            new workflow
+          </button>
+        )}
       </div>
 
       {/* Phase */}
@@ -41,7 +54,7 @@ export function AgentStreamPanel() {
           agentMessages.map((msg) => (
             <AgentMessageItem
               key={msg.id}
-              message={msg as TextMessage | ErrorMessage}
+              message={msg as TextMessage | ErrorMessage | UserMessage}
             />
           ))
         )}

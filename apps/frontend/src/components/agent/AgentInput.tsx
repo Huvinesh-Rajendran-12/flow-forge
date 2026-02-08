@@ -5,6 +5,7 @@ import { useSSEStream } from '../../hooks/useSSEStream';
 export function AgentInput() {
   const [description, setDescription] = useState('');
   const isStreaming = useWorkflowStore((state) => state.isStreaming);
+  const sessionId = useWorkflowStore((state) => state.sessionId);
   const { startStream } = useSSEStream();
 
   const handleSubmit = async (e: FormEvent) => {
@@ -29,7 +30,7 @@ export function AgentInput() {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="describe your workflow..."
+          placeholder={sessionId ? "refine your workflow..." : "describe your workflow..."}
           className="flex-1 bg-transparent border-none outline-none font-mono text-sm text-terminal-green placeholder:text-terminal-text-dim caret-terminal-green resize-none"
           rows={2}
           disabled={isStreaming}
