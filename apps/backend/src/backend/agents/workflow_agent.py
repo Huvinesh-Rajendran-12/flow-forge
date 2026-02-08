@@ -216,6 +216,7 @@ async def generate_workflow(
     team: str = "default",
     existing_workflow: Workflow | None = None,
     workflow_store: WorkflowStore | None = None,
+    session_id: str | None = None,
 ) -> AsyncGenerator[dict[str, Any], None]:
     """Generate or modify a structured DAG workflow from natural language.
 
@@ -225,6 +226,7 @@ async def generate_workflow(
         team: Team whose KB to load (defaults to "default")
         existing_workflow: If provided, agent modifies this workflow instead of creating new
         workflow_store: If provided, save the workflow after successful generation
+        session_id: If provided, resume an existing agent session for multi-turn refinement
 
     Yields:
         Message dicts with type and content
@@ -234,31 +236,50 @@ async def generate_workflow(
 
     mcp_server = create_flowforge_mcp_server(team=team)
 
-    if existing_workflow:
-        system_prompt = MODIFY_SYSTEM_PROMPT.format(
-            existing_workflow_json=existing_workflow.model_dump_json(indent=2),
-            schema_description=WORKFLOW_SCHEMA_DESCRIPTION,
+    if session_id:
+        # Follow up turn: the resumed session already has the system prompt
+        prompt = (
+            f"New workspace directory: {workspace}\n"
+            f"Write all files there using absolute paths (e.g., {workspace}/workflow.json).\n\n"
         )
+        if existing_workflow:
+            prompt += (
+                f"Current workflow JSON:\n```json\n"
+                f"{existing_workflow.model_dump_json(indent=2)}\n```\n\n"
+            )
+        prompt += f"User request: {description}"
+        if context:
+            prompt += "\n\nAdditional context:\n"
+            for key, value in context.items():
+                prompt += f"- {key}: {value}\n"
+
+        system_prompt = ""
     else:
-        system_prompt = GENERATE_SYSTEM_PROMPT.format(
-            schema_description=WORKFLOW_SCHEMA_DESCRIPTION,
-            example_workflow_json=EXAMPLE_WORKFLOW_JSON,
+        if existing_workflow:
+            system_prompt = MODIFY_SYSTEM_PROMPT.format(
+                existing_workflow_json=existing_workflow.model_dump_json(indent=2),
+                schema_description=WORKFLOW_SCHEMA_DESCRIPTION,
+            )
+        else:
+            system_prompt = GENERATE_SYSTEM_PROMPT.format(
+                schema_description=WORKFLOW_SCHEMA_DESCRIPTION,
+                example_workflow_json=EXAMPLE_WORKFLOW_JSON,
+            )
+
+        prompt = (
+            f"Your workspace directory is: {workspace}\n"
+            f"Write all files there using absolute paths (e.g., {workspace}/workflow.json).\n\n"
         )
 
-    prompt = (
-        f"Your workspace directory is: {workspace}\n"
-        f"Write all files there using absolute paths (e.g., {workspace}/workflow.json).\n\n"
-    )
+        if existing_workflow:
+            prompt += f"Modify the existing workflow based on the following request:\n\n{description}"
+        else:
+            prompt += f"Design a workflow DAG for the following request:\n\n{description}"
 
-    if existing_workflow:
-        prompt += f"Modify the existing workflow based on the following request:\n\n{description}"
-    else:
-        prompt += f"Design a workflow DAG for the following request:\n\n{description}"
-
-    if context:
-        prompt += "\n\nAdditional context:\n"
-        for key, value in context.items():
-            prompt += f"- {key}: {value}\n"
+        if context:
+            prompt += "\n\nAdditional context:\n"
+            for key, value in context.items():
+                prompt += f"- {key}: {value}\n"
 
     async for message in run_agent(
         prompt=prompt,
@@ -271,6 +292,7 @@ async def generate_workflow(
         ],
         max_turns=30,
         mcp_servers={"flowforge": mcp_server},
+        session_id=session_id,
     ):
         yield message
 
