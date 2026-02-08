@@ -64,6 +64,7 @@ async def create_workflow_endpoint(request: WorkflowRequest):
             team=request.team,
             existing_workflow=existing_workflow,
             workflow_store=workflow_store,
+            session_id=request.session_id,
         ):
             yield f"data: {json.dumps(message)}\n\n"
 
