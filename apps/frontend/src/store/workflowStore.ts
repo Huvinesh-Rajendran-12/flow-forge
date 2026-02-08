@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Message } from '../types/api';
+import { Message, ExecutionReportMessage } from '../types/api';
 import { WorkflowGraph, WorkflowMetadata, ExecutionStatus } from '../types/workflow';
 
 export type AgentPhase = 'idle' | 'searching' | 'building' | 'executing' | 'self_correcting' | 'complete' | 'error';
@@ -13,7 +13,8 @@ interface WorkflowState {
   totalTokens: number;
   agentPhase: AgentPhase;
   nodeStatuses: Record<string, ExecutionStatus>;
-  executionReport: Message | null;
+  executionReports: ExecutionReportMessage[];
+  correctionAttempt: number;
   workflowSaved: { workflow_id: string; team: string; version: number } | null;
 
   // Actions
@@ -33,12 +34,18 @@ function detectPhase(message: Message, currentPhase: AgentPhase): AgentPhase {
 
   if (message.type === 'text') {
     const text = message.content.toLowerCase();
-    if (text.includes('self-correction') || text.includes('fix')) return 'self_correcting';
+    if (text.includes('self-correction') || text.includes('self_correction') || text.includes('fix')) {
+      return 'self_correcting';
+    }
     if (text.includes('search') || text.includes('knowledge')) return 'searching';
     if (text.includes('generat') || text.includes('build') || text.includes('creat')) return 'building';
   }
 
   if (message.type === 'tool_use') {
+    // During self-correction, keep the phase sticky even for tool_use events
+    if (currentPhase === 'self_correcting') {
+      return 'self_correcting';
+    }
     const tool = message.content.tool.toLowerCase();
     if (tool.includes('search') || tool.includes('knowledge')) return 'searching';
     if (tool.includes('write') || tool.includes('edit')) return 'building';
@@ -56,7 +63,8 @@ const initialState = {
   totalTokens: 0,
   agentPhase: 'idle' as AgentPhase,
   nodeStatuses: {} as Record<string, ExecutionStatus>,
-  executionReport: null as Message | null,
+  executionReports: [] as ExecutionReportMessage[],
+  correctionAttempt: 0,
   workflowSaved: null as { workflow_id: string; team: string; version: number } | null,
 };
 
@@ -66,10 +74,26 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   addMessage: (message) =>
     set((state) => {
       const newMessages = [...state.messages, message];
+      let newCorrectionAttempt = state.correctionAttempt;
+
+      // Track correction attempts
+      if (message.type === 'text') {
+        const text = (message.content as string).toLowerCase();
+        if (text.includes('self-correction') || text.includes('self_correction')) {
+          newCorrectionAttempt = state.correctionAttempt + 1;
+        }
+      }
+
+      // Reset correction tracking when we get a new execution report
+      if (message.type === 'execution_report') {
+        newCorrectionAttempt = 0;
+      }
+
       const newPhase = detectPhase(message, state.agentPhase);
       const updates: Partial<WorkflowState> = {
         messages: newMessages,
         agentPhase: newPhase,
+        correctionAttempt: newCorrectionAttempt,
       };
 
       if (message.type === 'result') {
@@ -85,7 +109,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
       }
 
       if (message.type === 'execution_report') {
-        updates.executionReport = message;
+        updates.executionReports = [...state.executionReports, message];
       }
 
       if (message.type === 'workflow_saved') {
@@ -96,11 +120,14 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
     }),
 
   setStreaming: (isStreaming) =>
-    set({
+    set((state) => ({
       isStreaming,
-      ...(isStreaming ? { agentPhase: 'searching' as AgentPhase } : {}),
-      ...(!isStreaming ? {} : {}),
-    }),
+      ...(isStreaming
+        ? { agentPhase: 'searching' as AgentPhase }
+        : state.agentPhase !== 'error' && state.agentPhase !== 'idle'
+          ? { agentPhase: 'complete' as AgentPhase }
+          : {}),
+    })),
 
   setWorkflowGraph: (graph, metadata = {}) =>
     set((state) => ({
@@ -128,3 +155,6 @@ export const selectAgentMessages = (state: WorkflowState) =>
 
 export const selectToolMessages = (state: WorkflowState) =>
   state.messages.filter((m) => m.type === 'tool_use');
+
+export const selectLatestExecutionReport = (state: WorkflowState) =>
+  state.executionReports.length > 0 ? state.executionReports[state.executionReports.length - 1] : null;

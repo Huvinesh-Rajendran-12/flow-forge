@@ -1,4 +1,4 @@
-export type MessageType = 'text' | 'tool_use' | 'result' | 'error' | 'workspace' | 'workflow' | 'execution_report' | 'workflow_saved';
+export type MessageType = 'text' | 'tool_use' | 'tool_result' | 'result' | 'error' | 'workspace' | 'workflow' | 'execution_report' | 'workflow_saved';
 
 export interface BaseMessage {
   id: string;
@@ -16,6 +16,15 @@ export interface ToolUseMessage extends BaseMessage {
   content: {
     tool: string;
     input: Record<string, unknown>;
+  };
+}
+
+export interface ToolResultMessage extends BaseMessage {
+  type: 'tool_result';
+  content: {
+    tool_use_id: string;
+    result: unknown;
+    is_error: boolean;
   };
 }
 
@@ -56,11 +65,14 @@ export interface WorkflowMessage extends BaseMessage {
       service: string;
       action: string;
       actor: string;
-      parameters?: Array<{ name: string; type: string; required?: boolean }>;
+      parameters?: Array<{ name: string; value: unknown; description: string; required?: boolean }>;
       depends_on?: string[];
       outputs?: Record<string, string>;
     }>;
     edges: Array<{ source: string; target: string }>;
+    team?: string;
+    parameters?: Record<string, unknown>;
+    version?: number;
   };
 }
 
@@ -104,6 +116,7 @@ export interface WorkflowSavedMessage extends BaseMessage {
 export type Message =
   | TextMessage
   | ToolUseMessage
+  | ToolResultMessage
   | ResultMessage
   | ErrorMessage
   | WorkspaceMessage

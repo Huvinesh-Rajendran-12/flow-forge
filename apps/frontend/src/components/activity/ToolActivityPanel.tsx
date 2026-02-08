@@ -1,15 +1,15 @@
 import { useWorkflowStore, selectToolMessages } from '../../store/workflowStore';
 import { useAutoScroll } from '../../hooks/useAutoScroll';
-import { ToolUseMessage, ExecutionReportMessage } from '../../types/api';
+import { ToolUseMessage } from '../../types/api';
 import { ToolCallCard } from './ToolCallCard';
 import { ExecutionReportSection } from './ExecutionReportSection';
 import { MetricsBar } from './MetricsBar';
 
 export function ToolActivityPanel() {
   const toolMessages = useWorkflowStore(selectToolMessages);
-  const executionReport = useWorkflowStore((state) => state.executionReport);
+  const executionReports = useWorkflowStore((state) => state.executionReports);
   const isStreaming = useWorkflowStore((state) => state.isStreaming);
-  const scrollRef = useAutoScroll<HTMLDivElement>([toolMessages.length, executionReport]);
+  const scrollRef = useAutoScroll<HTMLDivElement>([toolMessages.length, executionReports.length]);
 
   return (
     <div className="h-full flex flex-col bg-terminal-panel border-l border-dashed border-terminal-border">
@@ -23,9 +23,9 @@ export function ToolActivityPanel() {
         </p>
       </div>
 
-      {/* Tool calls + report */}
+      {/* Tool calls + reports */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2">
-        {toolMessages.length === 0 && !executionReport ? (
+        {toolMessages.length === 0 && executionReports.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-terminal-text-dim font-mono text-xs">
               {'> '}no activity_
@@ -40,9 +40,9 @@ export function ToolActivityPanel() {
                 isLatest={isStreaming && i === toolMessages.length - 1}
               />
             ))}
-            {executionReport && executionReport.type === 'execution_report' && (
-              <ExecutionReportSection report={executionReport as ExecutionReportMessage} />
-            )}
+            {executionReports.map((report) => (
+              <ExecutionReportSection key={report.id} report={report} />
+            ))}
           </>
         )}
       </div>

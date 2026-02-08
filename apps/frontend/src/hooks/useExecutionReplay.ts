@@ -1,10 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { useWorkflowStore } from '../store/workflowStore';
-import { ExecutionReportMessage } from '../types/api';
+import { useWorkflowStore, selectLatestExecutionReport } from '../store/workflowStore';
 import { ExecutionStatus } from '../types/workflow';
 
 export function useExecutionReplay() {
-  const executionReport = useWorkflowStore((state) => state.executionReport);
+  const executionReport = useWorkflowStore(selectLatestExecutionReport);
   const setNodeStatuses = useWorkflowStore((state) => state.setNodeStatuses);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -13,10 +12,9 @@ export function useExecutionReplay() {
     timeoutsRef.current.forEach(clearTimeout);
     timeoutsRef.current = [];
 
-    if (!executionReport || executionReport.type !== 'execution_report') return;
+    if (!executionReport) return;
 
-    const report = executionReport as ExecutionReportMessage;
-    const steps = report.content.report.trace?.steps;
+    const steps = executionReport.content.report.trace?.steps;
 
     if (!steps || steps.length === 0) return;
 
