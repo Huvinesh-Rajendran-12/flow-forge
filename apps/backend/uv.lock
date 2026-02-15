@@ -22,7 +22,7 @@ wheels = [
 
 [[package]]
 name = "anthropic"
-version = "0.78.0"
+version = "0.79.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -34,9 +34,9 @@ dependencies = [
     { name = "sniffio" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ec/51/32849a48f9b1cfe80a508fd269b20bd8f0b1357c70ba092890fde5a6a10b/anthropic-0.78.0.tar.gz", hash = "sha256:55fd978ab9b049c61857463f4c4e9e092b24f892519c6d8078cee1713d8af06e", size = 509136, upload-time = "2026-02-05T17:52:04.986Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/15/b1/91aea3f8fd180d01d133d931a167a78a3737b3fd39ccef2ae8d6619c24fd/anthropic-0.79.0.tar.gz", hash = "sha256:8707aafb3b1176ed6c13e2b1c9fb3efddce90d17aee5d8b83a86c70dcdcca871", size = 509825, upload-time = "2026-02-07T18:06:18.388Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3b/03/2f50931a942e5e13f80e24d83406714672c57964be593fc046d81369335b/anthropic-0.78.0-py3-none-any.whl", hash = "sha256:2a9887d2e99d1b0f9fe08857a1e9fe5d2d4030455dbf9ac65aab052e2efaeac4", size = 405485, upload-time = "2026-02-05T17:52:03.674Z" },
+    { url = "https://files.pythonhosted.org/packages/95/b2/cc0b8e874a18d7da50b0fda8c99e4ac123f23bf47b471827c5f6f3e4a767/anthropic-0.79.0-py3-none-any.whl", hash = "sha256:04cbd473b6bbda4ca2e41dd670fe2f829a911530f01697d0a1e37321eb75f3cf", size = 405918, upload-time = "2026-02-07T18:06:20.246Z" },
 ]
 
 [[package]]
@@ -57,7 +57,6 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
-    { name = "claude-agent-sdk" },
     { name = "fastapi" },
     { name = "pi-agent-core" },
     { name = "pydantic" },
@@ -69,7 +68,6 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "anthropic", specifier = ">=0.40.0" },
-    { name = "claude-agent-sdk", specifier = "==0.1.26" },
     { name = "fastapi", specifier = ">=0.128.3" },
     { name = "pi-agent-core", specifier = ">=0.1.0" },
     { name = "pydantic", specifier = "==2.9.2" },
@@ -85,22 +83,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/e0/2d/a891ca51311197f6ad14a7ef42e2399f36cf2f9bd44752b3dc4eab60fdc5/certifi-2026.1.4.tar.gz", hash = "sha256:ac726dd470482006e014ad384921ed6438c457018f4b3d204aea4281258b2120", size = 154268, upload-time = "2026-01-04T02:42:41.825Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e6/ad/3cc14f097111b4de0040c83a525973216457bbeeb63739ef1ed275c1c021/certifi-2026.1.4-py3-none-any.whl", hash = "sha256:9943707519e4add1115f44c2bc244f782c0249876bf51b6599fee1ffbedd685c", size = 152900, upload-time = "2026-01-04T02:42:40.15Z" },
-]
-
-[[package]]
-name = "claude-agent-sdk"
-version = "0.1.26"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "anyio" },
-    { name = "mcp" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/cc/c5/587e4d22188726d2c7ac11f3146f4ef7f7f1864cdc31a183edcbb6eb8367/claude_agent_sdk-0.1.26.tar.gz", hash = "sha256:b03124346111c018b1ae77f537d4f7dcc62dcfd97db634cc142a057b0b051a9b", size = 57211, upload-time = "2026-01-30T20:48:54.152Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a8/ce/0e80d9c141547595b230d33e18d5f940c84bf5560f42d0ed16026290cd67/claude_agent_sdk-0.1.26-py3-none-macosx_11_0_arm64.whl", hash = "sha256:344408b83576cef9b98d12826ae74a347bd6fe6f31c5ff7e6b0e3b73fcd37666", size = 53901821, upload-time = "2026-01-30T20:48:40.182Z" },
-    { url = "https://files.pythonhosted.org/packages/42/bc/f7e8180ee4721c81d88fd4b83478f779a11f7a95dfdf354fb4209f4f30af/claude_agent_sdk-0.1.26-py3-none-manylinux_2_17_aarch64.whl", hash = "sha256:940fc82b0d222ee07b6d20e31063aa255533cabc02f1e404c35b9ea6786b4d43", size = 68106745, upload-time = "2026-01-30T20:48:44.012Z" },
-    { url = "https://files.pythonhosted.org/packages/85/88/dc8da2a38b3441c3c8a35ab26229daa3fdfd67f7e461ca9ab497d70a1589/claude_agent_sdk-0.1.26-py3-none-manylinux_2_17_x86_64.whl", hash = "sha256:aa5d5eb90a662912ce77c6023af1471c7e6bdfeb193dd945d4a170785206eda3", size = 69819882, upload-time = "2026-01-30T20:48:47.338Z" },
-    { url = "https://files.pythonhosted.org/packages/57/c7/9b3ddc3bc1c70b7372a6ee0a3de5627662e126946ad0f3d5a6a0d551941a/claude_agent_sdk-0.1.26-py3-none-win_amd64.whl", hash = "sha256:789235d9b7dd4df61f86b735b2563926dbf23e78e81e78d6b8177506567cc005", size = 72001402, upload-time = "2026-01-30T20:48:51.22Z" },
 ]
 
 [[package]]
@@ -144,7 +126,7 @@ wheels = [
 
 [[package]]
 name = "fastapi"
-version = "0.128.3"
+version = "0.129.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
@@ -153,9 +135,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "typing-inspection" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/44/93/6f8464c39697dfad67c0c37cb1d23f784096b08707506b559b36ef1ddf87/fastapi-0.128.3.tar.gz", hash = "sha256:ed99383fd96063447597d5aa2a9ec3973be198e3b4fc10c55f15c62efdb21c60", size = 377310, upload-time = "2026-02-06T16:47:19.456Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/48/47/75f6bea02e797abff1bca968d5997793898032d9923c1935ae2efdece642/fastapi-0.129.0.tar.gz", hash = "sha256:61315cebd2e65df5f97ec298c888f9de30430dd0612d59d6480beafbc10655af", size = 375450, upload-time = "2026-02-12T13:54:52.541Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/13/fb/6e46514575f7c4689d5aec223f47e847e77faada658da4d674c7e34a018f/fastapi-0.128.3-py3-none-any.whl", hash = "sha256:c8cdf7c2182c9a06bf9cfa3329819913c189dc86389b90d5709892053582db29", size = 105145, upload-time = "2026-02-06T16:47:22.365Z" },
+    { url = "https://files.pythonhosted.org/packages/9e/dd/d0ee25348ac58245ee9f90b6f3cbb666bf01f69be7e0911f9851bddbda16/fastapi-0.129.0-py3-none-any.whl", hash = "sha256:b4946880e48f462692b31c083be0432275cbfb6e2274566b1be91479cc1a84ec", size = 102950, upload-time = "2026-02-12T13:54:54.528Z" },
 ]
 
 [[package]]
@@ -196,15 +178,6 @@ wheels = [
 ]
 
 [[package]]
-name = "httpx-sse"
-version = "0.4.3"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/0f/4c/751061ffa58615a32c31b2d82e8482be8dd4a89154f003147acee90f2be9/httpx_sse-0.4.3.tar.gz", hash = "sha256:9b1ed0127459a66014aec3c56bebd93da3c1bc8bb6618c8082039a44889a755d", size = 15943, upload-time = "2025-10-10T21:48:22.271Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d2/fd/6668e5aec43ab844de6fc74927e155a3b37bf40d7c3790e49fc0406b6578/httpx_sse-0.4.3-py3-none-any.whl", hash = "sha256:0ac1c9fe3c0afad2e0ebb25a934a59f4c7823b60792691f779fad2c5568830fc", size = 8960, upload-time = "2025-10-10T21:48:21.158Z" },
-]
-
-[[package]]
 name = "idna"
 version = "3.11"
 source = { registry = "https://pypi.org/simple" }
@@ -240,33 +213,16 @@ wheels = [
 ]
 
 [[package]]
-name = "mcp"
-version = "1.1.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "anyio" },
-    { name = "httpx" },
-    { name = "httpx-sse" },
-    { name = "pydantic" },
-    { name = "sse-starlette" },
-    { name = "starlette" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f7/60/66ebfd280b197f9a9d074c9e46cb1ac3186a32d12e6bd0425c24fe7cf7e8/mcp-1.1.3.tar.gz", hash = "sha256:af11018b8e9153cdd25f3722ec639fe7a462c00213a330fd6f593968341a9883", size = 57903, upload-time = "2025-01-03T15:54:43.65Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b8/08/cfcfa13e41f8d27503c51a8cbf1939d720073ace92469d08655bb5de1b24/mcp-1.1.3-py3-none-any.whl", hash = "sha256:71462d6cd7c06c14689dfcf110ff22286ba1b608cfc3515c0a5cbe33d131731a", size = 36997, upload-time = "2025-01-03T15:54:39.284Z" },
-]
-
-[[package]]
 name = "pi-agent-core"
-version = "0.1.0"
+version = "0.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/01/c9/a970525446017a85ec0ded597c29fb1e8755fada7916abc61a8aaee3c6e0/pi_agent_core-0.1.0.tar.gz", hash = "sha256:87f11c39e40ce4902ac462b503f47a4bbaf8e5ccfecde02126072ba3ddf38e48", size = 13524, upload-time = "2026-02-15T08:39:24.655Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c2/04/0fa88a8be7f7f8fea650fcd374203c7cd5f91f0411d3d8bf94c82ae1c68d/pi_agent_core-0.1.1.tar.gz", hash = "sha256:ed45a5aa51d26a9471888cb4de22758587b0dd311496f490dabff456d3c8ee5b", size = 17873, upload-time = "2026-02-15T14:06:28.93Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/94/eb/f8cb8f497231034a7814bf33a534b91fc7902971d906a844802cf3e3b83e/pi_agent_core-0.1.0-py3-none-any.whl", hash = "sha256:56133bb8ae6f50795dcd1600b1b85d620de49530fd282425cd06fe1e2ad9b588", size = 15992, upload-time = "2026-02-15T08:39:22.769Z" },
+    { url = "https://files.pythonhosted.org/packages/93/e6/69f59a57398ff3091b75b6d8f844eab4f62ed71bed77f8545d041b1013cb/pi_agent_core-0.1.1-py3-none-any.whl", hash = "sha256:f915ed1d79775ae340bac41eea2ec65089e197333e08f16c4bec5245a99c073b", size = 21721, upload-time = "2026-02-15T14:06:30.724Z" },
 ]
 
 [[package]]
@@ -335,19 +291,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/a2/87/a6771e1546d97e7e041b6ae58d80074f81b7d5121207425c964ddf5cfdbd/sniffio-1.3.1.tar.gz", hash = "sha256:f4324edc670a0f49750a81b895f35c3adb843cca46f0530f79fc1babb23789dc", size = 20372, upload-time = "2024-02-25T23:20:04.057Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e9/44/75a9c9421471a6c4805dbf2356f7c181a29c1879239abab1ea2cc8f38b40/sniffio-1.3.1-py3-none-any.whl", hash = "sha256:2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2", size = 10235, upload-time = "2024-02-25T23:20:01.196Z" },
-]
-
-[[package]]
-name = "sse-starlette"
-version = "3.2.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "anyio" },
-    { name = "starlette" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/8b/8d/00d280c03ffd39aaee0e86ec81e2d3b9253036a0f93f51d10503adef0e65/sse_starlette-3.2.0.tar.gz", hash = "sha256:8127594edfb51abe44eac9c49e59b0b01f1039d0c7461c6fd91d4e03b70da422", size = 27253, upload-time = "2026-01-17T13:11:05.62Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/96/7f/832f015020844a8b8f7a9cbc103dd76ba8e3875004c41e08440ea3a2b41a/sse_starlette-3.2.0-py3-none-any.whl", hash = "sha256:5876954bd51920fc2cd51baee47a080eb88a37b5b784e615abb0b283f801cdbf", size = 12763, upload-time = "2026-01-17T13:11:03.775Z" },
 ]
 
 [[package]]
