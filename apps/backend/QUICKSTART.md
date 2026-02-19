@@ -38,15 +38,49 @@ Open docs:
 
 ---
 
-## 3) Quick API Smoke Test
+## 3) Culture Engine quick smoke test
 
-### Health
+### Create a Mind
 
 ```bash
-curl http://localhost:8000/api/health
+curl -X POST http://localhost:8000/api/minds \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Orbit",
+    "personality": "concise and practical",
+    "preferences": {"tone": "direct"}
+  }'
 ```
 
-### Generate workflow (SSE)
+### Delegate task (SSE)
+
+```bash
+curl -N -X POST http://localhost:8000/api/minds/<mind_id>/delegate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Summarize this week\'s engineering updates and draft a stakeholder note",
+    "team": "default"
+  }'
+```
+
+Common event types:
+- `tool_registry`
+- `text`
+- `tool_use`
+- `tool_result`
+- `result`
+- `error`
+
+### Inspect persisted state
+
+```bash
+curl http://localhost:8000/api/minds/<mind_id>/tasks
+curl http://localhost:8000/api/minds/<mind_id>/memory
+```
+
+---
+
+## 4) Legacy workflow path (compatibility)
 
 ```bash
 curl -N -X POST http://localhost:8000/api/workflows/generate \
@@ -62,46 +96,10 @@ curl -N -X POST http://localhost:8000/api/workflows/generate \
   }'
 ```
 
-You will receive streamed events such as:
-- `text`
-- `tool_use`
-- `tool_result`
-- `workflow`
-- `execution_report`
-- `result`
-- `error`
-- `workspace`
-
 ---
 
-## 4) Interactive CLI Example
-
-From `apps/backend`:
-
-```bash
-OPENROUTER_API_KEY=... ANTHROPIC_BASE_URL=https://openrouter.ai/api \
-uv run python examples/interactive_workflow_generator.py
-```
-
----
-
-## 5) Mental Model
-
-FlowForge uses a **unified agent** that can:
-1. understand request/context,
-2. write/modify `workflow.json`,
-3. validate against schema,
-4. execute in simulator,
-5. self-correct on failures.
-
-Default tools are intentionally minimal and composable:
-- `read_file`, `write_file`, `edit_file`, `search_apis`, `search_knowledge_base`
-
----
-
-## 6) Troubleshooting
+## 5) Troubleshooting
 
 - **Auth errors**: verify `.env` keys and endpoint settings
-- **No workflow produced**: inspect streamed `error` + `tool_result` events
 - **Port conflict**: run with `--port 8001`
 - **Dependency issues**: rerun `uv sync`

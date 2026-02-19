@@ -40,7 +40,7 @@ async def execute_task(
                     memories=memories,
                     tools=tools,
                     allowed_tools=allowed_tools,
-                    max_turns=max(1, min(max_turns, 20)),
+                    max_turns=max_turns,
                 ):
                     if event.get("type") == "text" and isinstance(event.get("content"), str):
                         chunks.append(event["content"])

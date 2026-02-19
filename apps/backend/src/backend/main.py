@@ -72,7 +72,7 @@ async def create_workflow_endpoint(request: WorkflowRequest):
             existing_workflow=existing_workflow,
             workflow_store=workflow_store,
         ):
-            yield f"data: {json.dumps(message)}\\n\\n"
+            yield f"data: {json.dumps(message)}\n\n"
 
     return StreamingResponse(
         event_stream(),
@@ -138,7 +138,7 @@ async def delegate_task(mind_id: str, request: DelegateTaskRequest):
             description=request.description,
             team=request.team,
         ):
-            yield f"data: {json.dumps(event, default=str)}\\n\\n"
+            yield f"data: {json.dumps(event, default=str)}\n\n"
 
     return StreamingResponse(
         event_stream(),

@@ -64,6 +64,8 @@ class OpenRouterIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_generate_workflow_via_openrouter(self):
         if not os.environ.get("OPENROUTER_API_KEY"):
             self.skipTest("OPENROUTER_API_KEY is not set")
+        if os.environ.get("RUN_OPENROUTER_INTEGRATION") != "1":
+            self.skipTest("Set RUN_OPENROUTER_INTEGRATION=1 to run external integration test")
 
         # OpenRouter Anthropic-compatible endpoint.
         os.environ.setdefault("ANTHROPIC_BASE_URL", "https://openrouter.ai/api/v1")

@@ -11,6 +11,9 @@ from pi_agent_core import AgentTool, AgentToolResult, AgentToolSchema, TextConte
 from ..memory import MemoryManager
 from ..schema import MemoryEntry
 
+DEFAULT_SPAWN_MAX_CALLS = 3
+DEFAULT_SPAWN_MAX_TURNS = 20
+
 
 def _text_result(value: str) -> AgentToolResult:
     return AgentToolResult(content=[TextContent(text=value)])
@@ -73,10 +76,22 @@ def create_memory_tools(memory_manager: MemoryManager, mind_id: str) -> list[Age
 
 def create_spawn_agent_tool(
     spawn_agent_fn: Callable[[str, int], Awaitable[str]],
+    *,
+    max_calls: int = DEFAULT_SPAWN_MAX_CALLS,
+    max_turns_cap: int = DEFAULT_SPAWN_MAX_TURNS,
 ) -> AgentTool:
+    spawn_calls = 0
+
     async def spawn_agent_execute(tool_call_id: str, params: dict[str, Any], **_: object) -> AgentToolResult:
+        nonlocal spawn_calls
+
+        spawn_calls += 1
+        if spawn_calls > max_calls:
+            return _text_result(f"spawn_agent call limit reached ({max_calls}). Continue without spawning.")
+
         objective = params["objective"]
         max_turns = int(params.get("max_turns", 12))
+        max_turns = max(1, min(max_turns, max_turns_cap))
         result = await spawn_agent_fn(objective, max_turns)
         return _text_result(result)
 
