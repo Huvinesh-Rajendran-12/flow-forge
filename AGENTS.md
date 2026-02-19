@@ -63,6 +63,8 @@ Still exposed and supported:
 - `mind/reasoning.py` — dynamic system prompt + agent execution
 - `mind/orchestrator.py` — simplified single-run orchestrator
 - `mind/pipeline.py` — delegate flow (load memory → execute → persist)
+- `mind/tools/factory.py` — plain per-run tool list assembly
+- `mind/tools/primitives.py` — Mind-specific primitives (`memory_save`, `memory_search`, `spawn_agent`)
 
 ### Legacy workflow layer
 - `workflow/` — schema/executor/pipeline/store/report
@@ -91,10 +93,16 @@ Guideline:
 - composition/prompting first,
 - new tools only when necessary.
 
-For Culture Engine Phase 2, build dynamic tooling incrementally:
-1. registry first,
-2. core primitives,
-3. runtime extension.
+Culture Engine Phase 2 was intentionally simplified:
+- no runtime tool registration API yet,
+- no persistent dynamic tool store yet,
+- no separate tool-registry abstraction.
+
+Current Mind tool assembly is a plain list built per run:
+- legacy composable tools from `agents/tools.py`
+- `memory_save`
+- `memory_search`
+- `spawn_agent` (explicit sub-agent delegation)
 
 ---
 
@@ -133,7 +141,7 @@ npm run dev
 
 ## 8) Near-term Plan
 
-1. Finalize Phase 1 polish (done/small fixes only).
-2. Build Phase 2 dynamic tool system (minimal registry + primitives).
-3. Wire tools into Mind pipeline.
-4. Add focused tests for Mind core and delegation pipeline.
+1. Keep Phase 1/2 core stable (Mind + memory + explicit `spawn_agent`).
+2. Add focused tests for Mind core, delegation pipeline, and tool events.
+3. Improve sub-agent orchestration quality before adding new abstractions.
+4. Revisit runtime tool registration only after clear product need appears.

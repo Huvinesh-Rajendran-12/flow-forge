@@ -70,7 +70,11 @@ npm run dev
 ## Current Direction
 
 - **Phase 1 complete (simplified):** Mind identity + memory + reasoning + single-path orchestrator.
-- **Phase 2 next:** dynamic tool system (registry + primitives + runtime extension).
+- **Phase 2 (simplified foundation) now in place:**
+  - plain per-run tool list assembly,
+  - memory primitives (`memory_save`, `memory_search`),
+  - explicit sub-agent delegation (`spawn_agent`).
+- Deferred intentionally: runtime tool registration API and persistent dynamic tool store.
 
 Design principle: **simplify first, extend second**.
 
