@@ -82,16 +82,19 @@ Notes:
 
 ## Tests
 
-Current tests:
-- `tests/test_workflow_engine_core.py`
-- `tests/test_workflow_generation.py`
-- `tests/test_integration_openrouter.py`
-- `tests/test_integration_mind_openrouter.py`
-- `tests/test_mind_api.py`
-- `tests/test_mind_persistence.py`
-
-Run:
+Default test run:
 
 ```bash
-uv run python -m unittest discover -s tests -p "test_*.py"
+uv run python -m pytest
 ```
+
+OpenRouter integration tests (opt-in):
+
+```bash
+export OPENROUTER_API_KEY=your_key
+export RUN_OPENROUTER_INTEGRATION=1
+export ANTHROPIC_BASE_URL=https://openrouter.ai/api/v1
+uv run python -m pytest tests/test_integration_openrouter.py tests/test_integration_mind_openrouter.py
+```
+
+Without the integration env vars, OpenRouter tests are skipped by design.

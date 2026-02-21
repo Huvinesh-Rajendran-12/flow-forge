@@ -21,8 +21,9 @@ MAX_ATTEMPTS = 2
 class OpenRouterMindIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self.tmp_dir = Path(tempfile.mkdtemp(prefix="mind-openrouter-it-"))
-        self.mind_store = MindStore(self.tmp_dir)
-        self.memory_manager = MemoryManager(self.tmp_dir / "memory")
+        self.db_path = self.tmp_dir / "mind.db"
+        self.mind_store = MindStore(self.db_path)
+        self.memory_manager = MemoryManager(self.db_path)
         self._old_default_model = os.environ.get("DEFAULT_MODEL")
 
     async def asyncTearDown(self) -> None:
@@ -34,7 +35,9 @@ class OpenRouterMindIntegrationTests(unittest.IsolatedAsyncioTestCase):
         get_settings.cache_clear()
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
-    async def _collect_events(self, mind_id: str, timeout_seconds: int = 240) -> list[dict]:
+    async def _collect_events(
+        self, mind_id: str, timeout_seconds: int = 240
+    ) -> list[dict]:
         events: list[dict] = []
 
         async def _run() -> None:
@@ -53,7 +56,9 @@ class OpenRouterMindIntegrationTests(unittest.IsolatedAsyncioTestCase):
     @staticmethod
     def _diagnostics(events: list[dict]) -> str:
         event_types = [event.get("type") for event in events]
-        errors = [event.get("content") for event in events if event.get("type") == "error"]
+        errors = [
+            event.get("content") for event in events if event.get("type") == "error"
+        ]
         tail = event_types[-12:]
         return f"types={event_types}; tail={tail}; errors={errors}"
 
@@ -61,7 +66,9 @@ class OpenRouterMindIntegrationTests(unittest.IsolatedAsyncioTestCase):
         if not os.environ.get("OPENROUTER_API_KEY"):
             self.skipTest("OPENROUTER_API_KEY is not set")
         if os.environ.get("RUN_OPENROUTER_INTEGRATION") != "1":
-            self.skipTest("Set RUN_OPENROUTER_INTEGRATION=1 to run external integration test")
+            self.skipTest(
+                "Set RUN_OPENROUTER_INTEGRATION=1 to run external integration test"
+            )
 
         os.environ.setdefault("ANTHROPIC_BASE_URL", "https://openrouter.ai/api/v1")
         os.environ["DEFAULT_MODEL"] = MODEL_ID
@@ -74,7 +81,14 @@ class OpenRouterMindIntegrationTests(unittest.IsolatedAsyncioTestCase):
         last_events: list[dict] = []
         for _ in range(MAX_ATTEMPTS):
             last_events = await self._collect_events(mind.id)
-            finished = next((event for event in last_events if event.get("type") == "task_finished"), None)
+            finished = next(
+                (
+                    event
+                    for event in last_events
+                    if event.get("type") == "task_finished"
+                ),
+                None,
+            )
             if finished and finished.get("content", {}).get("status") == "completed":
                 break
 
@@ -82,23 +96,32 @@ class OpenRouterMindIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(
             "task_started",
             event_types,
-            "Expected task_started event from delegation pipeline. " + self._diagnostics(last_events),
+            "Expected task_started event from delegation pipeline. "
+            + self._diagnostics(last_events),
         )
         self.assertIn(
             "task_finished",
             event_types,
-            "Expected task_finished event from delegation pipeline. " + self._diagnostics(last_events),
+            "Expected task_finished event from delegation pipeline. "
+            + self._diagnostics(last_events),
         )
 
-        finished = next(event for event in last_events if event.get("type") == "task_finished")
+        finished = next(
+            event for event in last_events if event.get("type") == "task_finished"
+        )
         self.assertEqual(
             finished["content"].get("status"),
             "completed",
-            "Expected completed status for Mind delegation run. " + self._diagnostics(last_events),
+            "Expected completed status for Mind delegation run. "
+            + self._diagnostics(last_events),
         )
         self.assertTrue(
-            any(event_type in {"text", "result", "tool_use", "tool_result"} for event_type in event_types),
-            "Expected streamed reasoning/tool events from agent run. " + self._diagnostics(last_events),
+            any(
+                event_type in {"text", "result", "tool_use", "tool_result"}
+                for event_type in event_types
+            ),
+            "Expected streamed reasoning/tool events from agent run. "
+            + self._diagnostics(last_events),
         )
 
         tasks = self.mind_store.list_tasks(mind.id)

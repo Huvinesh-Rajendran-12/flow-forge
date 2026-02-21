@@ -97,3 +97,4 @@ bun run build:frontend
 - Agent map: `AGENTS.md`
 - Backend details: `apps/backend/README.md`
 - Backend quickstart: `apps/backend/QUICKSTART.md`
+- Branch protection baseline: `.github/BRANCH_PROTECTION.md`

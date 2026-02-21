@@ -1,0 +1,51 @@
+name: Integration
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: integration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  openrouter:
+    name: openrouter-integration-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: apps/backend
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      RUN_OPENROUTER_INTEGRATION: "1"
+      ANTHROPIC_BASE_URL: https://openrouter.ai/api/v1
+      DEFAULT_MODEL: anthropic/claude-haiku-4.5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Sync backend dependencies
+        run: uv sync --frozen --group dev
+
+      - name: Assert integration secret is configured
+        run: |
+          if [ -z "${OPENROUTER_API_KEY}" ]; then
+            echo "OPENROUTER_API_KEY secret is missing"
+            exit 1
+          fi
+
+      - name: Run OpenRouter integration tests
+        run: uv run python -m pytest tests/test_integration_openrouter.py tests/test_integration_mind_openrouter.py
