@@ -54,7 +54,8 @@ class GoogleConnector(BaseConnector):
         self._sa_info = service_account_info
         self._admin_email = admin_email
         self._domain = domain
-        self._token_cache: dict[str, Any] = {}
+        self._cached_token: str | None = None
+        self._token_expiry: int = 0
 
     @classmethod
     def from_settings(
@@ -184,9 +185,14 @@ class GoogleConnector(BaseConnector):
         """Obtain an access token via JWT assertion (service account flow).
 
         Uses only the standard library + httpx — no google-auth SDK required.
+        Caches the token until 5 minutes before expiry.
         """
         import time
         import urllib.parse
+
+        now = int(time.time())
+        if self._cached_token and now < self._token_expiry:
+            return self._cached_token
 
         try:
             import jwt  # PyJWT
@@ -220,7 +226,10 @@ class GoogleConnector(BaseConnector):
             body = json.loads(resp.read())
         if "access_token" not in body:
             raise ServiceError(f"Failed to obtain Google access token: {body}", "auth_error")
-        return body["access_token"]
+        self._cached_token = body["access_token"]
+        # Cache until 5 minutes before expiry (tokens last 3600s)
+        self._token_expiry = now + body.get("expires_in", 3600) - 300
+        return self._cached_token
 
 
 def _temp_password() -> str:

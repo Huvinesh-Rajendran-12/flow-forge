@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import logging
 import re
 import sys
 from pathlib import Path
@@ -12,6 +13,8 @@ import httpx
 
 from ..simulator.state import ExecutionTrace
 from .base import BaseConnector
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..config import Settings
@@ -65,14 +68,18 @@ class ConnectorRegistry:
         # 1. Try built-in registered connectors
         cls = _BUILTIN_REGISTRY.get(service_name)
         if cls is not None:
-            return self._instantiate_connector(service_name, cls)
+            instance = self._instantiate_connector(service_name, cls)
+            if instance is not None:
+                return instance
+            # Built-in failed — fall through to custom file as fallback
+            logger.debug("Built-in connector %s failed to load; trying custom fallback", service_name)
 
         # 2. Try dynamically-loaded custom connector (agent-built)
         custom_path = CUSTOM_CONNECTOR_DIR / f"{service_name}.py"
         if custom_path.exists():
-            cls = _load_custom_connector(custom_path, service_name)
-            if cls is not None:
-                return self._instantiate_connector(service_name, cls)
+            custom_cls = _load_custom_connector(custom_path, service_name)
+            if custom_cls is not None:
+                return self._instantiate_connector(service_name, custom_cls)
 
         return None
 

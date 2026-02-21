@@ -117,6 +117,9 @@ All responses are SSE events with shape `{"type": "...", "content": ...}`. Types
 | `simulator/state.py` | `SimulatorState` (mutable shared state), `ExecutionTrace`, `TraceStep` |
 | `simulator/services.py` | In-memory stubs: `HRService`, `GoogleService`, `SlackService`, `JiraService`, `GitHubService` |
 | `simulator/failures.py` | `FailureConfig` + `FailureRule` for probabilistic failure injection |
+| `connectors/__init__.py` | `create_service_layer()` / `close_service_layer()` — hybrid real+simulator routing; stashes `_http_client` for cleanup |
+| `connectors/registry.py` | `ConnectorRegistry` — discovers built-in + custom connectors; falls back to custom file if built-in fails |
+| `connectors/builder/` | Agent-driven connector generation + two-stage validation (AST + subprocess, enforces `@classmethod`) |
 
 ### Workflow Data Model
 

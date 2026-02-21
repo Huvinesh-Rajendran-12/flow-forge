@@ -61,6 +61,7 @@ Still exposed and supported:
 - `mind/identity.py` — Mind creation helpers
 - `mind/memory.py` — SQLite-backed memory manager with FTS5 search
 - `mind/store.py` — SQLite-backed profile + task persistence
+- `main.py` → `_migrate_legacy_json()` — one-time migration from legacy JSON files into SQLite (runs in lifespan handler, marker-file guarded)
 - `mind/reasoning.py` — dynamic system prompt + agent execution
 - `mind/orchestrator.py` — simplified single-run orchestrator
 - `mind/pipeline.py` — delegate flow (load memory → execute → persist)
@@ -161,8 +162,10 @@ When a PR gets review comments, follow this flow:
 4. **Patterns we now enforce in connector code**
    - Validate untrusted identifiers before file-path usage (e.g., service names for `custom_connectors`).
    - Isolate dynamic connector instantiation failures so one bad connector does not break unrelated workflows.
-   - Close `httpx.AsyncClient` instances after each workflow run.
+   - Fall back to custom connector file when a built-in connector's `from_settings` fails.
+   - Close `httpx.AsyncClient` instances after each workflow run (stashed in service map via `_http_client` key to prevent orphan leaks).
    - Skip connector auto-build loops when `connector_mode == "simulator"`.
+   - Connector validator enforces `@classmethod` decorator on `from_settings` / `is_configured`.
 
 5. **Verify before shipping**
    - Run backend tests: `cd apps/backend && uv run python -m pytest`

@@ -1,4 +1,6 @@
 import json
+import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -10,10 +12,13 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from .mind.identity import create_mind_identity
 from .mind.memory import MemoryManager
 from .mind.pipeline import delegate_to_mind
+from .mind.schema import MemoryEntry, MindProfile, Task
 from .mind.store import MindStore
 from .models import DelegateTaskRequest, HealthResponse, MindCreateRequest, WorkflowRequest
 from .workflow.pipeline import generate_workflow
 from .workflow.store import WorkflowStore
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -60,6 +65,106 @@ workflow_store = WorkflowStore(WORKFLOWS_DIR)
 _DB_PATH = CULTURE_DATA_DIR / "culture.db"
 mind_store = MindStore(_DB_PATH)
 memory_manager = MemoryManager(_DB_PATH)
+
+
+def _migrate_legacy_json(base_dir: Path) -> None:
+    """One-time migration: import legacy JSON files into SQLite if they exist."""
+    minds_dir = base_dir / "minds"
+    tasks_dir = base_dir / "tasks"
+    memory_dirs: list[Path] = []
+    traces_dir = base_dir / "traces"
+
+    # Look for a sibling "memory" dir (old MemoryManager layout)
+    memory_root = base_dir / "memory"
+    if memory_root.exists():
+        memory_dirs = [d for d in memory_root.iterdir() if d.is_dir()]
+
+    if not any(d.exists() for d in [minds_dir, tasks_dir, memory_root, traces_dir]):
+        return  # nothing to migrate
+
+    marker = base_dir / ".migrated_to_sqlite"
+    if marker.exists():
+        return  # already migrated
+
+    logger.info("Migrating legacy JSON data to SQLite from %s", base_dir)
+    count = 0
+    failures = 0
+
+    # Minds
+    if minds_dir.exists():
+        for fp in minds_dir.glob("*.json"):
+            try:
+                mind = MindProfile.model_validate(json.loads(fp.read_text()))
+                mind_store.save_mind(mind)
+                count += 1
+            except Exception:
+                failures += 1
+                logger.warning("Skipping invalid mind file: %s", fp)
+
+    # Tasks (per-mind subdirectories)
+    if tasks_dir.exists():
+        for mind_dir in tasks_dir.iterdir():
+            if not mind_dir.is_dir():
+                continue
+            for fp in mind_dir.glob("*.json"):
+                try:
+                    task = Task.model_validate(json.loads(fp.read_text()))
+                    mind_store.save_task(mind_dir.name, task)
+                    count += 1
+                except Exception:
+                    failures += 1
+                    logger.warning("Skipping invalid task file: %s", fp)
+
+    # Memories (per-mind subdirectories)
+    for mind_dir in memory_dirs:
+        for fp in mind_dir.glob("*.json"):
+            try:
+                entry = MemoryEntry.model_validate(json.loads(fp.read_text()))
+                memory_manager.save(entry)
+                count += 1
+            except Exception:
+                failures += 1
+                logger.warning("Skipping invalid memory file: %s", fp)
+
+    # Task traces (per-mind subdirectories)
+    if traces_dir.exists():
+        for mind_dir in traces_dir.iterdir():
+            if not mind_dir.is_dir():
+                continue
+            for fp in mind_dir.glob("*.json"):
+                try:
+                    data = json.loads(fp.read_text())
+                    mind_store.save_task_trace(
+                        data["mind_id"], data["task_id"], data.get("events", [])
+                    )
+                    count += 1
+                except Exception:
+                    failures += 1
+                    logger.warning("Skipping invalid trace file: %s", fp)
+
+    if failures > 0 and count == 0:
+        logger.error(
+            "Legacy migration failed: all %d files were invalid. "
+            "Schema may be incompatible. Migration marker NOT written — "
+            "will retry on next startup.",
+            failures,
+        )
+        return
+
+    marker.write_text("migrated")
+    logger.info("Legacy migration complete — imported %d records (%d skipped)", count, failures)
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Run one-time startup tasks before serving requests."""
+    _migrate_legacy_json(CULTURE_DATA_DIR)
+    if LEGACY_MIND_DATA_DIR.exists() and LEGACY_MIND_DATA_DIR != CULTURE_DATA_DIR:
+        _migrate_legacy_json(LEGACY_MIND_DATA_DIR)
+    yield
+
+
+app.router.lifespan_context = _lifespan
 
 
 @app.get("/api/health", response_model=HealthResponse)

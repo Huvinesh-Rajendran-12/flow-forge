@@ -67,10 +67,23 @@ def validate_connector_file(
         if action not in method_names:
             errors.append(f"Required method '{action}' not found in '{expected_class}'")
 
-    # Check mandatory classmethods
+    # Check mandatory classmethods — must exist and be decorated with @classmethod
+    classmethod_names = {
+        n.name
+        for n in ast.walk(class_node)
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and any(
+            isinstance(d, ast.Name) and d.id == "classmethod"
+            for d in n.decorator_list
+        )
+    }
     for cm in ("from_settings", "is_configured"):
         if cm not in method_names:
             errors.append(f"Required classmethod '{cm}' not found in '{expected_class}'")
+        elif cm not in classmethod_names:
+            errors.append(
+                f"'{cm}' in '{expected_class}' must be decorated with @classmethod"
+            )
 
     if errors:
         return errors
