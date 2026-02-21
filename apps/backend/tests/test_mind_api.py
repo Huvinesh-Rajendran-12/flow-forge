@@ -3,6 +3,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -12,6 +13,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
 
 from backend import main
 from backend.mind.memory import MemoryManager
+from backend.mind.schema import Task
 from backend.mind.store import MindStore
 from backend.mind.tools.primitives import create_memory_tools, create_spawn_agent_tool
 
@@ -132,6 +134,81 @@ class MindApiTests(unittest.TestCase):
         self.assertEqual(memory_resp.status_code, 200)
         memories = memory_resp.json()
         self.assertTrue(any(m["category"] == "task_result" for m in memories))
+
+    def test_spawn_agent_uses_isolated_workspace(self):
+        create_resp = self.client.post("/api/minds", json={"name": "Hub"})
+        self.assertEqual(create_resp.status_code, 200)
+        mind_id = create_resp.json()["id"]
+
+        async def fake_run_agent(*args, **kwargs):
+            prompt = kwargs.get("prompt", "")
+            tools_override = kwargs.get("tools_override") or []
+            tools = {tool.name: tool for tool in tools_override}
+
+            if prompt.startswith("[Drone Objective]"):
+                # This write must stay inside the drone workspace.
+                await tools["write_file"].execute(
+                    "drone_write",
+                    {"path": "artifact.txt", "content": "from drone"},
+                )
+                yield {"type": "text", "content": "drone complete"}
+                yield {"type": "result", "content": {"subtype": "completed"}}
+                return
+
+            await tools["spawn_agent"].execute(
+                "parent_spawn",
+                {"objective": "create artifact", "max_turns": 5},
+            )
+
+            leak_detected = False
+            try:
+                read_result = await tools["read_file"].execute("parent_read", {"path": "artifact.txt"})
+                leak_detected = "from drone" in read_result.content[0].text
+            except Exception:
+                leak_detected = False
+
+            yield {"type": "text", "content": f"drone_workspace_leak={leak_detected}"}
+            yield {"type": "result", "content": {"subtype": "completed"}}
+
+        with patch("backend.mind.reasoning.run_agent", new=fake_run_agent):
+            with self.client.stream(
+                "POST",
+                f"/api/minds/{mind_id}/delegate",
+                json={"description": "Run workspace isolation check", "team": "default"},
+            ) as response:
+                self.assertEqual(response.status_code, 200)
+                events = self._read_sse(response)
+
+        text_events = [e.get("content") for e in events if e.get("type") == "text"]
+        self.assertTrue(any("drone_workspace_leak=False" in str(content) for content in text_events))
+
+
+class MindStoreTests(unittest.TestCase):
+    def test_list_tasks_orders_by_created_at_desc(self):
+        tmp_dir = Path(tempfile.mkdtemp(prefix="mind-store-tests-"))
+        store = MindStore(tmp_dir)
+        try:
+            mind_id = "mind_1"
+            older = Task(
+                id="zzz_older",
+                mind_id=mind_id,
+                description="older task",
+                created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+            )
+            newer = Task(
+                id="aaa_newer",
+                mind_id=mind_id,
+                description="newer task",
+                created_at=datetime(2025, 1, 2, tzinfo=timezone.utc),
+            )
+
+            store.save_task(mind_id, older)
+            store.save_task(mind_id, newer)
+
+            tasks = store.list_tasks(mind_id)
+            self.assertEqual([task.id for task in tasks], ["aaa_newer", "zzz_older"])
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 class SpawnAgentToolTests(unittest.IsolatedAsyncioTestCase):

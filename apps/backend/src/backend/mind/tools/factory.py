@@ -18,12 +18,17 @@ def create_mind_tools(
     memory_manager: MemoryManager,
     mind_id: str,
     spawn_agent_fn: Callable[[str, int], Awaitable[str]],
+    include_spawn_agent: bool = True,
 ) -> list[AgentTool]:
-    return [
+    tools = [
         *create_flowforge_tools(team=team, workspace_dir=workspace_dir),
         *create_memory_tools(memory_manager=memory_manager, mind_id=mind_id),
-        create_spawn_agent_tool(spawn_agent_fn),
     ]
+
+    if include_spawn_agent:
+        tools.append(create_spawn_agent_tool(spawn_agent_fn))
+
+    return tools
 
 
 def tool_names(tools: list[AgentTool]) -> list[str]:

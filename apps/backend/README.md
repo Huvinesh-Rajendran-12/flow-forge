@@ -73,6 +73,7 @@ Notes:
 - no persistent dynamic tool store yet
 - explicit `spawn_agent` delegation only (no implicit auto-splitting)
 - guardrails: capped spawned sub-agent calls, capped sub-agent turns, capped event volume per run
+- Mind/task/memory persistence uses atomic JSON writes with a simple file lock
 
 ## Examples
 
@@ -85,7 +86,9 @@ Current tests:
 - `tests/test_workflow_engine_core.py`
 - `tests/test_workflow_generation.py`
 - `tests/test_integration_openrouter.py`
+- `tests/test_integration_mind_openrouter.py`
 - `tests/test_mind_api.py`
+- `tests/test_mind_persistence.py`
 
 Run:
 

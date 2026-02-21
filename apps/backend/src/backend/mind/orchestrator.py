@@ -25,21 +25,30 @@ async def execute_task(
     Sub-agents are available only through the explicit spawn_agent tool.
     """
     with TemporaryDirectory(prefix="mind-") as workspace:
-        tools = []
 
         async def _spawn_agent(objective: str, max_turns: int) -> str:
-            allowed_tools = [tool.name for tool in tools if tool.name != "spawn_agent"]
             chunks: list[str] = []
 
             with TemporaryDirectory(prefix="drone-") as drone_workspace:
+                # Build a fresh per-drone toolset bound to the drone workspace.
+                # Keep delegation explicit and one level deep by excluding spawn_agent.
+                drone_tools = create_mind_tools(
+                    team=team,
+                    workspace_dir=drone_workspace,
+                    memory_manager=memory_manager,
+                    mind_id=mind.id,
+                    spawn_agent_fn=_spawn_agent,
+                    include_spawn_agent=False,
+                )
+
                 async for event in run_mind_reasoning(
                     mind=mind,
                     task=f"[Drone Objective] {objective}",
                     workspace_dir=drone_workspace,
                     team=team,
                     memories=memories,
-                    tools=tools,
-                    allowed_tools=allowed_tools,
+                    tools=drone_tools,
+                    allowed_tools=tool_names(drone_tools),
                     max_turns=max_turns,
                 ):
                     if event.get("type") == "text" and isinstance(event.get("content"), str):
@@ -55,6 +64,7 @@ async def execute_task(
             memory_manager=memory_manager,
             mind_id=mind.id,
             spawn_agent_fn=_spawn_agent,
+            include_spawn_agent=True,
         )
 
         yield {
