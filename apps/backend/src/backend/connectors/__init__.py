@@ -66,12 +66,21 @@ def create_service_layer(
         if sim_svc is not None:
             services[name] = sim_svc
 
+    # Stash the http_client so close_service_layer can always close it,
+    # even when no connectors ended up in the service map.
+    services["_http_client"] = http_client
+
     return state, trace, services, failure_config
 
 
 async def close_service_layer(services: dict[str, Any]) -> None:
     """Close any connector AsyncClient instances attached to the service map."""
     clients: dict[int, httpx.AsyncClient] = {}
+
+    # Always close the shared http_client created by create_service_layer.
+    stashed = services.pop("_http_client", None)
+    if isinstance(stashed, httpx.AsyncClient):
+        clients[id(stashed)] = stashed
 
     for service in services.values():
         if isinstance(service, BaseConnector):
