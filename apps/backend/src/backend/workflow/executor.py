@@ -1,7 +1,9 @@
-"""DAG executor which  runs a workflow against simulated service backends."""
+"""DAG executor: runs a workflow against service backends (simulator or real connectors)."""
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 from collections import defaultdict, deque
 from datetime import datetime
 
@@ -82,7 +84,7 @@ class WorkflowExecutor:
 
             # Execute the node
             try:
-                result = self._execute_node(node, workflow)
+                result = await self._execute_node(node, workflow)
                 self.node_outputs[node_id] = result
                 successful += 1
             except Exception as e:
@@ -115,8 +117,12 @@ class WorkflowExecutor:
             dependency_violations=dependency_violations,
         )
 
-    def _execute_node(self, node: WorkflowNode, workflow: Workflow) -> dict:
-        """Execute a single workflow node by dispatching to the appropriate service."""
+    async def _execute_node(self, node: WorkflowNode, workflow: Workflow) -> dict:
+        """Execute a single workflow node by dispatching to the appropriate service.
+
+        Supports both async connectors (awaited directly) and sync simulator services
+        (dispatched via asyncio.to_thread to avoid blocking the event loop).
+        """
         service = self.services.get(node.service)
         if service is None:
             raise ServiceError(f"Unknown service: {node.service}", "unknown_service")
@@ -129,7 +135,9 @@ class WorkflowExecutor:
             )
 
         params = self._resolve_parameters(node, workflow)
-        return action_fn(node.id, **params)
+        if inspect.iscoroutinefunction(action_fn):
+            return await action_fn(node.id, **params)
+        return await asyncio.to_thread(action_fn, node.id, **params)
 
     def _resolve_parameters(self, node: WorkflowNode, workflow: Workflow) -> dict:
         """Build the parameter dict for a node, substituting global and upstream values."""
