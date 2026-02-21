@@ -50,7 +50,7 @@ def validate_connector_file(
     has_service_name = any(
         isinstance(n, ast.Assign)
         and any(isinstance(t, ast.Name) and t.id == "service_name" for t in n.targets)
-        for n in ast.walk(class_node)
+        for n in class_node.body
     )
     if not has_service_name:
         errors.append(f"Class '{expected_class}' is missing a 'service_name' class attribute")
