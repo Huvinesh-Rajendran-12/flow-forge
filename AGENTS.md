@@ -38,7 +38,7 @@ Current backend endpoints:
 
 Phase 1 scope intentionally simplified:
 - single-path orchestration (no automatic sub-agent splitting)
-- file-based memory/task persistence
+- SQLite (WAL mode) persistence with FTS5 memory search
 - prompt composition from identity + memory
 
 ### B) Legacy FlowForge (compat path)
@@ -57,9 +57,10 @@ Still exposed and supported:
 
 ### Culture Engine layer
 - `mind/schema.py` — Mind/Drone/Task/Memory models
+- `mind/database.py` — SQLite schema, WAL mode init, FTS5 virtual table + triggers
 - `mind/identity.py` — Mind creation helpers
-- `mind/memory.py` — persistent memory manager
-- `mind/store.py` — profile + task persistence
+- `mind/memory.py` — SQLite-backed memory manager with FTS5 search
+- `mind/store.py` — SQLite-backed profile + task persistence
 - `mind/reasoning.py` — dynamic system prompt + agent execution
 - `mind/orchestrator.py` — simplified single-run orchestrator
 - `mind/pipeline.py` — delegate flow (load memory → execute → persist)
@@ -139,7 +140,45 @@ npm run dev
 
 ---
 
-## 8) Near-term Plan
+## 8) PR Review Comment Handling (Codex/GitHub bots/humans)
+
+When a PR gets review comments, follow this flow:
+
+1. **Fetch the latest comments first**
+   - Identify the current PR: `gh pr status`
+   - Pull latest bot reviews/comments with `gh api` (prefer structured JSON + `jq` over manual UI scanning).
+
+2. **Validate each comment against current HEAD**
+   - Read the referenced files before changing anything.
+   - Reproduce critical claims with quick checks (e.g., path resolution, mode flags, resource lifecycle).
+   - Mark each comment as: **valid / partially valid / not valid** with a short reason.
+
+3. **Fix only what is valid, with minimal compatible changes**
+   - Prioritize **P1 security/reliability** items first.
+   - Preserve backward compatibility and SSE contracts.
+   - Keep fixes explicit (no speculative abstractions).
+
+4. **Patterns we now enforce in connector code**
+   - Validate untrusted identifiers before file-path usage (e.g., service names for `custom_connectors`).
+   - Isolate dynamic connector instantiation failures so one bad connector does not break unrelated workflows.
+   - Close `httpx.AsyncClient` instances after each workflow run.
+   - Skip connector auto-build loops when `connector_mode == "simulator"`.
+
+5. **Verify before shipping**
+   - Run backend tests: `cd apps/backend && uv run python -m pytest`
+   - Ensure working tree is clean except intended changes.
+
+6. **Ship and request re-review**
+   - Commit with a focused message.
+   - Push branch.
+   - Tag Codex again on the PR, e.g.:
+     - `gh pr comment <pr_number> --body "@codex review\n\nAddressed latest feedback in <commit>."`
+
+If feedback is not valid, do **not** churn code; reply on PR with concise technical rationale.
+
+---
+
+## 9) Near-term Plan
 
 1. Keep Phase 1/2 core stable (Mind + memory + explicit `spawn_agent`).
 2. Add focused tests for Mind core, delegation pipeline, and tool events.

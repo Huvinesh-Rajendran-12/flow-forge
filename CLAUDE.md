@@ -34,6 +34,55 @@ cp .env.example .env
 # Set OPENROUTER_API_KEY or ANTHROPIC_API_KEY in .env
 ```
 
+## PR Review Comment Workflow
+
+When addressing GitHub PR feedback (including `chatgpt-codex-connector[bot]`):
+
+1. **Fetch latest review comments with `gh api`**
+
+```bash
+gh pr status
+
+# Example for PR 2 in this repo:
+PR=2
+review_id=$(gh api repos/Huvinesh-Rajendran-12/flow-forge/pulls/$PR/reviews \
+  --jq 'map(select(.user.login=="chatgpt-codex-connector[bot]")) | sort_by(.submitted_at) | last | .id')
+
+gh api repos/Huvinesh-Rajendran-12/flow-forge/pulls/$PR/reviews/$review_id/comments
+```
+
+2. **Validate each comment before editing**
+- Re-read the referenced files.
+- Reproduce the issue quickly (path resolution, runtime mode behavior, lifecycle/cleanup).
+- Classify as valid / invalid and only change code for valid items.
+
+3. **Apply minimal, compatible fixes**
+- Prioritize P1 security/reliability comments.
+- Keep legacy workflow compatibility and SSE event contract intact.
+- For connector code specifically:
+  - sanitize service names before file-path operations,
+  - isolate connector load/instantiation failures,
+  - close `httpx.AsyncClient` resources,
+  - avoid connector auto-build work in `connector_mode="simulator"`.
+
+4. **Run backend tests**
+
+```bash
+cd apps/backend
+uv run python -m pytest
+```
+
+5. **Commit, push, and trigger another review**
+
+```bash
+git add <files>
+git commit -m "<focused message>"
+git push
+gh pr comment $PR --body "@codex review\n\nAddressed latest feedback in <commit>."
+```
+
+If a comment is not valid, respond in the PR with a concise technical rationale instead of adding churn.
+
 ## Architecture
 
 FlowForge is a monorepo with a FastAPI backend and a React frontend. The core feature is AI-driven workflow generation: the user describes a process in natural language, the agent generates a JSON DAG, the system validates and simulates it, then persists successful workflows.
