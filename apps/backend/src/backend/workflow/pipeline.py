@@ -11,7 +11,7 @@ from typing import Any, AsyncGenerator
 from ..agents.base import run_agent
 from ..agents.tools import DEFAULT_TOOL_NAMES
 from ..config import get_settings
-from ..connectors import create_service_layer
+from ..connectors import close_service_layer, create_service_layer
 from ..connectors.builder.agent import build_connector
 from .executor import WorkflowExecutor
 from .schema import Workflow
@@ -274,32 +274,38 @@ async def generate_workflow(
             settings = get_settings()
             state, trace, services, failure_config = create_service_layer(settings)
 
-            # Build connectors for any services not yet available
-            missing = _collect_missing_services(workflow, services)
-            if missing:
-                for service_name, actions in missing.items():
-                    workflow_ctx = (
-                        f"Workflow: {workflow.name}\n"
-                        f"Actions needed: {', '.join(sorted(actions))}"
-                    )
-                    async for msg in build_connector(
-                        service_name=service_name,
-                        required_actions=sorted(actions),
-                        workflow_context=workflow_ctx,
-                        team=team,
-                    ):
-                        yield msg
-                # Reload services so the new connector is included
-                state, trace, services, failure_config = create_service_layer(settings)
+            try:
+                # Build connectors for any services not yet available
+                missing = _collect_missing_services(workflow, services)
+                if missing:
+                    for service_name, actions in missing.items():
+                        workflow_ctx = (
+                            f"Workflow: {workflow.name}\n"
+                            f"Actions needed: {', '.join(sorted(actions))}"
+                        )
+                        async for msg in build_connector(
+                            service_name=service_name,
+                            required_actions=sorted(actions),
+                            workflow_context=workflow_ctx,
+                            team=team,
+                        ):
+                            yield msg
 
-            executor = WorkflowExecutor(
-                state=state,
-                trace=trace,
-                services=services,
-                failure_config=failure_config,
-            )
-            report = await executor.execute(workflow)
-            final_report = report
+                    # Reload services so the new connector is included.
+                    await close_service_layer(services)
+                    services = {}
+                    state, trace, services, failure_config = create_service_layer(settings)
+
+                executor = WorkflowExecutor(
+                    state=state,
+                    trace=trace,
+                    services=services,
+                    failure_config=failure_config,
+                )
+                report = await executor.execute(workflow)
+                final_report = report
+            finally:
+                await close_service_layer(services)
 
             yield {
                 "type": "execution_report",

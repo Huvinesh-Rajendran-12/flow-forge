@@ -20,7 +20,8 @@ if TYPE_CHECKING:
 _BUILTIN_REGISTRY: dict[str, Type[BaseConnector]] = {}
 
 # Directory where agent-built custom connectors are persisted
-CUSTOM_CONNECTOR_DIR = Path(__file__).resolve().parents[4] / "custom_connectors"
+# apps/backend/src/backend/connectors/registry.py -> parents[3] == apps/backend
+CUSTOM_CONNECTOR_DIR = Path(__file__).resolve().parents[3] / "custom_connectors"
 
 
 def register(cls: Type[BaseConnector]) -> Type[BaseConnector]:

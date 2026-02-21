@@ -1,21 +1,25 @@
 """Connector package: real API connectors with transparent simulator fallback.
 
 Usage:
-    from backend.connectors import create_service_layer
-    state, trace, services, failure_config = create_service_layer(settings)
+    from backend.connectors import create_service_layer, close_service_layer
 
-    # services dict is passed directly to WorkflowExecutor — same interface as create_simulator().
+    state, trace, services, failure_config = create_service_layer(settings)
+    try:
+        ...
+    finally:
+        await close_service_layer(services)
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
 from ..simulator import create_simulator
 from ..simulator.failures import FailureConfig
 from ..simulator.state import ExecutionTrace, SimulatorState
+from .base import BaseConnector
 from .registry import ConnectorRegistry
 
 if TYPE_CHECKING:
@@ -28,7 +32,7 @@ from . import github, google, hr, jira, slack  # noqa: E402, F401
 def create_service_layer(
     settings: Settings,
     failure_config: FailureConfig | None = None,
-) -> tuple[SimulatorState, ExecutionTrace, dict, FailureConfig | None]:
+) -> tuple[SimulatorState, ExecutionTrace, dict[str, Any], FailureConfig | None]:
     """Create a service dict with hybrid real+simulator routing.
 
     Modes (controlled by settings.connector_mode):
@@ -37,9 +41,6 @@ def create_service_layer(
                      falls back to the simulator service otherwise
       "real"       — same as hybrid; callers can inspect returned services to
                      verify all are real connectors
-
-    The return signature is identical to create_simulator() so pipeline.py
-    needs only a one-line import change.
     """
     state, trace, sim_services, _ = create_simulator()
 
@@ -49,12 +50,32 @@ def create_service_layer(
     http_client = httpx.AsyncClient(timeout=30.0)
     registry = ConnectorRegistry(settings, trace, http_client)
 
-    services: dict = {}
-    for name, sim_svc in sim_services.items():
+    services: dict[str, Any] = {}
+    service_names = set(sim_services.keys()) | set(registry.list_available())
+
+    for name in sorted(service_names):
         connector = registry.get(name)
-        if connector is not None and connector.is_configured(settings):
+        sim_svc = sim_services.get(name)
+
+        # Prefer a configured connector, and always expose connector-only services
+        # (services that do not exist in the legacy simulator set).
+        if connector is not None and (connector.is_configured(settings) or sim_svc is None):
             services[name] = connector
-        else:
-            services[name] = sim_svc  # transparent per-service fallback
+            continue
+
+        if sim_svc is not None:
+            services[name] = sim_svc
 
     return state, trace, services, failure_config
+
+
+async def close_service_layer(services: dict[str, Any]) -> None:
+    """Close any connector AsyncClient instances attached to the service map."""
+    clients: dict[int, httpx.AsyncClient] = {}
+
+    for service in services.values():
+        if isinstance(service, BaseConnector):
+            clients[id(service.http)] = service.http
+
+    for client in clients.values():
+        await client.aclose()
