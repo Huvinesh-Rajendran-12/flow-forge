@@ -4,3 +4,8 @@ dist
 __pycache__
 .venv
 *.pyc
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
