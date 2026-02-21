@@ -223,8 +223,8 @@ class GoogleConnector(BaseConnector):
         return body["access_token"]
 
 
-def _temp_password(name: str) -> str:
-    """Generate a deterministic temporary password for a new user."""
-    import hashlib
-    digest = hashlib.sha256(name.encode()).hexdigest()[:12]
-    return f"Tmp!{digest}"
+def _temp_password() -> str:
+    """Generate a secure random temporary password for a new user."""
+    import secrets, string
+    alphabet = string.ascii_letters + string.digits + "!@#$%"
+    return "".join(secrets.choice(alphabet) for _ in range(12))
