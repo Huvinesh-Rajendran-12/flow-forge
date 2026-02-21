@@ -91,7 +91,8 @@ class ConnectorRegistry:
         """Instantiate connector class safely without aborting the whole workflow."""
         try:
             instance = cls.from_settings(self._settings, self._trace, self._http)
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to instantiate connector '%s': %s", service_name, e, exc_info=True)
             return None
 
         self._cache[service_name] = instance
