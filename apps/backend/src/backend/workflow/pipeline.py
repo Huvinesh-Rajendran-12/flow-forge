@@ -10,7 +10,9 @@ from typing import Any, AsyncGenerator
 
 from ..agents.base import run_agent
 from ..agents.tools import DEFAULT_TOOL_NAMES
-from ..simulator import create_simulator
+from ..config import get_settings
+from ..connectors import create_service_layer
+from ..connectors.builder.agent import build_connector
 from .executor import WorkflowExecutor
 from .schema import Workflow
 from .store import WorkflowStore
@@ -269,7 +271,27 @@ async def generate_workflow(
             final_workflow = workflow
             yield {"type": "workflow", "content": workflow.model_dump()}
 
-            state, trace, services, failure_config = create_simulator()
+            settings = get_settings()
+            state, trace, services, failure_config = create_service_layer(settings)
+
+            # Build connectors for any services not yet available
+            missing = _collect_missing_services(workflow, services)
+            if missing:
+                for service_name, actions in missing.items():
+                    workflow_ctx = (
+                        f"Workflow: {workflow.name}\n"
+                        f"Actions needed: {', '.join(sorted(actions))}"
+                    )
+                    async for msg in build_connector(
+                        service_name=service_name,
+                        required_actions=sorted(actions),
+                        workflow_context=workflow_ctx,
+                        team=team,
+                    ):
+                        yield msg
+                # Reload services so the new connector is included
+                state, trace, services, failure_config = create_service_layer(settings)
+
             executor = WorkflowExecutor(
                 state=state,
                 trace=trace,
@@ -341,3 +363,12 @@ async def generate_workflow(
     finally:
         if completed_normally:
             shutil.rmtree(workspace, ignore_errors=True)
+
+
+def _collect_missing_services(workflow: Workflow, services: dict) -> dict[str, set[str]]:
+    """Return {service_name: {action, ...}} for services not present in the services dict."""
+    missing: dict[str, set[str]] = {}
+    for node in workflow.nodes:
+        if node.service not in services:
+            missing.setdefault(node.service, set()).add(node.action)
+    return missing
