@@ -24,8 +24,9 @@ class MindApiTests(unittest.TestCase):
         self._old_mind_store = main.mind_store
         self._old_memory_manager = main.memory_manager
 
-        main.mind_store = MindStore(self.tmp_dir)
-        main.memory_manager = MemoryManager(self.tmp_dir / "memory")
+        db_path = self.tmp_dir / "test.db"
+        main.mind_store = MindStore(db_path)
+        main.memory_manager = MemoryManager(db_path)
         self.client = TestClient(main.app)
 
     def tearDown(self) -> None:
@@ -186,7 +187,7 @@ class MindApiTests(unittest.TestCase):
 class MindStoreTests(unittest.TestCase):
     def test_list_tasks_orders_by_created_at_desc(self):
         tmp_dir = Path(tempfile.mkdtemp(prefix="mind-store-tests-"))
-        store = MindStore(tmp_dir)
+        store = MindStore(tmp_dir / "test.db")
         try:
             mind_id = "mind_1"
             older = Task(
@@ -235,7 +236,7 @@ class SpawnAgentToolTests(unittest.IsolatedAsyncioTestCase):
 class MemoryToolTests(unittest.IsolatedAsyncioTestCase):
     async def test_memory_save_limits_calls(self):
         tmp_dir = Path(tempfile.mkdtemp(prefix="memory-tool-tests-"))
-        manager = MemoryManager(tmp_dir / "memory")
+        manager = MemoryManager(tmp_dir / "test.db")
         try:
             tools = create_memory_tools(manager, "mind_1", max_saves=1)
             memory_save = next(tool for tool in tools if tool.name == "memory_save")

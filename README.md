@@ -12,7 +12,7 @@ Today, the repo contains:
 
 | Directory | Stack | Description |
 |---|---|---|
-| `apps/backend` | Python, FastAPI, pi-agent-core | API for legacy workflows + new Mind delegation |
+| `apps/backend` | Python, FastAPI, pi-agent-core, SQLite | API for legacy workflows + new Mind delegation |
 | `apps/frontend` | React, Vite, TypeScript | Web client scaffold |
 | `apps/workflows` | JSON | Legacy workflow artifacts |
 
@@ -74,7 +74,8 @@ npm run dev
 - **Phase 2 (simplified foundation) now in place:**
   - plain per-run tool list assembly,
   - memory primitives (`memory_save`, `memory_search`),
-  - explicit sub-agent delegation (`spawn_agent`).
+  - explicit sub-agent delegation (`spawn_agent`),
+  - SQLite (WAL mode) persistence with FTS5 full-text memory search.
 - Deferred intentionally: runtime tool registration API and persistent dynamic tool store.
 
 Design principle: **simplify first, extend second**.

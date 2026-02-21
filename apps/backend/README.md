@@ -73,7 +73,7 @@ Notes:
 - no persistent dynamic tool store yet
 - explicit `spawn_agent` delegation only (no implicit auto-splitting)
 - guardrails: capped spawned sub-agent calls, capped sub-agent turns, capped event volume per run
-- Mind/task/memory persistence uses atomic JSON writes with a simple file lock
+- Mind/task/memory persistence uses SQLite (WAL mode) with FTS5 full-text memory search
 
 ## Examples
 

@@ -57,8 +57,9 @@ if not CULTURE_DATA_DIR.exists() and LEGACY_MIND_DATA_DIR.exists():
     CULTURE_DATA_DIR = LEGACY_MIND_DATA_DIR
 
 workflow_store = WorkflowStore(WORKFLOWS_DIR)
-mind_store = MindStore(CULTURE_DATA_DIR)
-memory_manager = MemoryManager(CULTURE_DATA_DIR / "memory")
+_DB_PATH = CULTURE_DATA_DIR / "culture.db"
+mind_store = MindStore(_DB_PATH)
+memory_manager = MemoryManager(_DB_PATH)
 
 
 @app.get("/api/health", response_model=HealthResponse)
