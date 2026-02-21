@@ -275,26 +275,27 @@ async def generate_workflow(
             state, trace, services, failure_config = create_service_layer(settings)
 
             try:
-                # Build connectors for any services not yet available
-                missing = _collect_missing_services(workflow, services)
-                if missing:
-                    for service_name, actions in missing.items():
-                        workflow_ctx = (
-                            f"Workflow: {workflow.name}\n"
-                            f"Actions needed: {', '.join(sorted(actions))}"
-                        )
-                        async for msg in build_connector(
-                            service_name=service_name,
-                            required_actions=sorted(actions),
-                            workflow_context=workflow_ctx,
-                            team=team,
-                        ):
-                            yield msg
+                # Build missing connectors only when connector mode can use them.
+                if settings.connector_mode != "simulator":
+                    missing = _collect_missing_services(workflow, services)
+                    if missing:
+                        for service_name, actions in missing.items():
+                            workflow_ctx = (
+                                f"Workflow: {workflow.name}\n"
+                                f"Actions needed: {', '.join(sorted(actions))}"
+                            )
+                            async for msg in build_connector(
+                                service_name=service_name,
+                                required_actions=sorted(actions),
+                                workflow_context=workflow_ctx,
+                                team=team,
+                            ):
+                                yield msg
 
-                    # Reload services so the new connector is included.
-                    await close_service_layer(services)
-                    services = {}
-                    state, trace, services, failure_config = create_service_layer(settings)
+                        # Reload services so the new connector is included.
+                        await close_service_layer(services)
+                        services = {}
+                        state, trace, services, failure_config = create_service_layer(settings)
 
                 executor = WorkflowExecutor(
                     state=state,

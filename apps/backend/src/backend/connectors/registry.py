@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Type
@@ -22,6 +23,14 @@ _BUILTIN_REGISTRY: dict[str, Type[BaseConnector]] = {}
 # Directory where agent-built custom connectors are persisted
 # apps/backend/src/backend/connectors/registry.py -> parents[3] == apps/backend
 CUSTOM_CONNECTOR_DIR = Path(__file__).resolve().parents[3] / "custom_connectors"
+
+# Safe service-name pattern used for connector file lookup and persistence
+_SERVICE_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+
+
+def is_safe_service_name(service_name: str) -> bool:
+    """Return True if service_name is safe for file-based connector operations."""
+    return bool(_SERVICE_NAME_RE.fullmatch(service_name))
 
 
 def register(cls: Type[BaseConnector]) -> Type[BaseConnector]:
@@ -47,26 +56,39 @@ class ConnectorRegistry:
 
     def get(self, service_name: str) -> BaseConnector | None:
         """Return a live connector instance, or None if unavailable."""
+        if not is_safe_service_name(service_name):
+            return None
+
         if service_name in self._cache:
             return self._cache[service_name]
 
         # 1. Try built-in registered connectors
         cls = _BUILTIN_REGISTRY.get(service_name)
         if cls is not None:
-            instance = cls.from_settings(self._settings, self._trace, self._http)
-            self._cache[service_name] = instance
-            return instance
+            return self._instantiate_connector(service_name, cls)
 
         # 2. Try dynamically-loaded custom connector (agent-built)
         custom_path = CUSTOM_CONNECTOR_DIR / f"{service_name}.py"
         if custom_path.exists():
             cls = _load_custom_connector(custom_path, service_name)
             if cls is not None:
-                instance = cls.from_settings(self._settings, self._trace, self._http)
-                self._cache[service_name] = instance
-                return instance
+                return self._instantiate_connector(service_name, cls)
 
         return None
+
+    def _instantiate_connector(
+        self,
+        service_name: str,
+        cls: Type[BaseConnector],
+    ) -> BaseConnector | None:
+        """Instantiate connector class safely without aborting the whole workflow."""
+        try:
+            instance = cls.from_settings(self._settings, self._trace, self._http)
+        except Exception:
+            return None
+
+        self._cache[service_name] = instance
+        return instance
 
     def invalidate(self, service_name: str) -> None:
         """Remove a cached connector instance so it will be reloaded on next get()."""
@@ -77,7 +99,9 @@ class ConnectorRegistry:
         built_in = set(_BUILTIN_REGISTRY.keys())
         custom: set[str] = set()
         if CUSTOM_CONNECTOR_DIR.exists():
-            custom = {p.stem for p in CUSTOM_CONNECTOR_DIR.glob("*.py")}
+            custom = {
+                p.stem for p in CUSTOM_CONNECTOR_DIR.glob("*.py") if is_safe_service_name(p.stem)
+            }
         return sorted(built_in | custom)
 
 

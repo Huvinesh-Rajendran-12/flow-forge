@@ -18,7 +18,7 @@ from typing import Any, AsyncGenerator
 
 from ...agents.base import run_agent
 from ...agents.tools import DEFAULT_TOOL_NAMES
-from ..registry import CUSTOM_CONNECTOR_DIR
+from ..registry import CUSTOM_CONNECTOR_DIR, is_safe_service_name
 from .template import BUILDER_SYSTEM_PROMPT, BUILDER_USER_PROMPT
 from .validator import validate_connector_file
 
@@ -34,6 +34,16 @@ async def build_connector(
     Yields SSE dicts so the pipeline can stream build progress to the client.
     Types used: "text", "tool_use", "tool_result", "connector_built", "error"
     """
+    if not is_safe_service_name(service_name):
+        yield {
+            "type": "error",
+            "content": (
+                f"Refusing to build connector for invalid service name '{service_name}'. "
+                "Use only letters, numbers, and underscores."
+            ),
+        }
+        return
+
     workspace = tempfile.mkdtemp(prefix="connector-build-")
     connector_file = Path(workspace) / "connector.py"
     service_name_cap = service_name.capitalize()
