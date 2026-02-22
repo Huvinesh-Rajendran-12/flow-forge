@@ -93,9 +93,6 @@ async def delegate_to_mind(
                     else:
                         run_failure_reason = f"Mind run ended with subtype={subtype}"
 
-            if event_type == "error" and isinstance(content, str) and content.strip():
-                run_failure_reason = content.strip()
-
             _record(event)
             yield event
 

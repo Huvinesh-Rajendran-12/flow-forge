@@ -891,6 +891,253 @@ button:disabled { opacity: 0.42; cursor: not-allowed; }
 .composing-idle .composing-label { opacity: 0.7; }
 
 /* =====================================================
+   View toggle — Output / Debug switch
+   ===================================================== */
+.view-toggle-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.toggle-label {
+  font-family: var(--font-heading);
+  font-size: 0.64rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  transition: color 180ms;
+  user-select: none;
+}
+
+.toggle-label-active { color: var(--gold); }
+
+.toggle-pill {
+  width: 38px;
+  height: 21px;
+  border-radius: 999px;
+  background: rgba(229, 169, 58, 0.18);
+  border: 1px solid rgba(229, 169, 58, 0.35);
+  position: relative;
+  transition: background 200ms, border-color 200ms;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.toggle-pill.toggled {
+  background: rgba(110, 169, 216, 0.18);
+  border-color: rgba(110, 169, 216, 0.38);
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--gold);
+  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1), background 200ms;
+  display: block;
+}
+
+.toggle-pill.toggled .toggle-knob {
+  transform: translateX(17px);
+  background: var(--sky);
+}
+
+/* =====================================================
+   Output view layout
+   ===================================================== */
+.output-layout {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: var(--gap);
+  align-items: start;
+}
+
+.output-main { /* takes the 1fr column */ }
+.output-side { /* takes the 280px column */ }
+
+/* The scrollable output feed */
+.output-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 560px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(191, 143, 59, 0.25) transparent;
+  padding-right: 4px;
+}
+
+.output-feed::-webkit-scrollbar       { width: 4px; }
+.output-feed::-webkit-scrollbar-thumb { background: rgba(191, 143, 59, 0.25); border-radius: 2px; }
+
+/* Text output block — the hero element */
+.output-text-block {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius);
+  background: rgba(8, 10, 20, 0.88);
+  padding: 16px 18px;
+  animation: event-rise 260ms ease-out;
+}
+
+.output-text {
+  font-family: var(--font-body);
+  font-size: 1.02rem;
+  line-height: 1.78;
+  color: var(--ink-1);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Tool activity pill */
+.activity-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  align-self: flex-start;
+  animation: event-rise 200ms ease-out;
+  transition: border-color 200ms;
+}
+
+.activity-pill[data-status="ok"] {
+  border-color: rgba(107, 191, 142, 0.2);
+}
+
+.activity-pill[data-status="error"] {
+  border-color: rgba(204, 90, 90, 0.3);
+  background: rgba(204, 90, 90, 0.06);
+}
+
+.activity-glyph {
+  font-size: 0.78rem;
+  color: var(--gold-mid);
+  opacity: 0.75;
+  line-height: 1;
+}
+
+.activity-label {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--ink-3);
+}
+
+.activity-err {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  color: var(--rose);
+}
+
+.activity-pending {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--gold-mid);
+  animation: dot-pulse 1s ease-in-out infinite;
+}
+
+/* Spawn output block */
+.spawn-output {
+  border: 1px solid rgba(110, 169, 216, 0.2);
+  border-left: 3px solid rgba(110, 169, 216, 0.55);
+  border-radius: var(--radius);
+  background: rgba(5, 12, 22, 0.84);
+  padding: 11px 12px 11px 14px;
+  animation: event-rise 250ms ease-out;
+}
+
+.spawn-output[data-error="true"] {
+  border-left-color: rgba(204, 90, 90, 0.75);
+  border-color: rgba(204, 90, 90, 0.18);
+  background: rgba(18, 5, 5, 0.84);
+}
+
+.spawn-output-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.spawn-output-glyph {
+  font-size: 0.85rem;
+  color: var(--sky);
+  line-height: 1;
+}
+
+.spawn-output-label {
+  font-family: var(--font-heading);
+  font-size: 0.6rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--sky);
+  opacity: 0.8;
+}
+
+.spawn-output-objective {
+  color: var(--ink-2);
+  font-size: 0.92rem;
+  margin-bottom: 6px;
+}
+
+.spawn-output-result {
+  font-family: var(--font-mono);
+  font-size: 0.71rem;
+  color: var(--ink-3);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.spawn-output-running {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--gold-mid);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Heading status badges */
+.heading-live {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--gold);
+  letter-spacing: 0.08em;
+}
+
+.heading-status-ok {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--mint);
+  letter-spacing: 0.06em;
+}
+
+.heading-status-err {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--rose);
+  letter-spacing: 0.06em;
+}
+
+@media (max-width: 960px) {
+  .output-layout { grid-template-columns: 1fr; }
+}
+
+/* =====================================================
    Spawn (sub-agent) cards
    ===================================================== */
 .spawn-card {

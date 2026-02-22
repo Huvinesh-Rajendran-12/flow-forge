@@ -279,6 +279,47 @@ class MindApiTests(unittest.TestCase):
         self.assertEqual(tasks[0]["status"], "failed")
         self.assertIn("Upstream provider unavailable", tasks[0]["result"])
 
+    def test_intermediate_error_event_does_not_force_failure_when_result_completes(
+        self,
+    ):
+        create_resp = self.client.post(
+            "/api/minds",
+            json={"name": "Signal"},
+        )
+        self.assertEqual(create_resp.status_code, 200)
+        mind_id = create_resp.json()["id"]
+
+        async def fake_run_agent(*args, **kwargs):
+            yield {"type": "error", "content": "Transient tool timeout"}
+            yield {
+                "type": "result",
+                "content": {
+                    "subtype": "completed",
+                    "final_text": "Recovered and completed successfully.",
+                },
+            }
+
+        with patch("backend.mind.reasoning.run_agent", new=fake_run_agent):
+            with self.client.stream(
+                "POST",
+                f"/api/minds/{mind_id}/delegate",
+                json={"description": "Run recovery check", "team": "default"},
+            ) as response:
+                self.assertEqual(response.status_code, 200)
+                events = self._read_sse(response)
+
+        event_types = [evt["type"] for evt in events]
+        self.assertIn("error", event_types)
+
+        finished = next(evt for evt in events if evt["type"] == "task_finished")
+        self.assertEqual(finished["content"]["status"], "completed")
+
+        tasks_resp = self.client.get(f"/api/minds/{mind_id}/tasks")
+        tasks = tasks_resp.json()
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]["status"], "completed")
+        self.assertEqual(tasks[0]["result"], "Recovered and completed successfully.")
+
 
 class MindStoreTests(unittest.TestCase):
     def test_list_tasks_orders_by_created_at_desc(self):

@@ -77,6 +77,11 @@
     taskId: string;
   };
 
+  type OutputItem =
+    | { kind: "text"; content: string }
+    | { kind: "tool"; name: string; status: "pending" | "ok" | "error" }
+    | { kind: "spawn"; objective: string; result: string; isError: boolean };
+
   type Section = "minds" | "delegate" | "telemetry" | "history" | "memory";
 
   // ── API ──────────────────────────────────────────────────────────────────────
@@ -150,6 +155,8 @@
   let activeSection  = $state<Section>("minds");
   let navOpen        = $state(false);
   let expandedEvents = $state<Set<string>>(new Set());
+  // "output" = user-facing view, "debug" = raw event telemetry
+  let viewMode       = $state<"output" | "debug">("output");
 
   // ── Derived ──────────────────────────────────────────────────────────────────
 
@@ -187,6 +194,53 @@
   });
   let memoryCategories    = $derived(buildMemoryCategories(memories));
   let filteredMemories    = $derived(filterMemories(memories, memorySearch, memoryCategory));
+  // Build a clean output-centric view of the run: text blocks + tool activity pills
+  let runOutputItems      = $derived.by((): OutputItem[] => {
+    const items: OutputItem[] = [];
+    const toolCallMap = new Map<string, number>(); // callId → index
+    const spawnMap    = new Map<string, number>(); // callId → index
+
+    for (const event of runEvents) {
+      if (event.type === "text") {
+        const text = typeof event.content === "string" ? event.content : "";
+        if (text.trim()) items.push({ kind: "text", content: text });
+      }
+
+      if (event.type === "tool_use") {
+        const payload  = asObject(event.content);
+        const toolName = typeof payload.tool === "string" ? payload.tool : "unknown";
+        const callId   = typeof payload.id   === "string" ? payload.id   : "";
+
+        if (toolName === "spawn_agent") {
+          const input     = asObject(payload.input);
+          const objective = typeof input.objective === "string" ? input.objective : "Delegated sub-task";
+          const idx = items.length;
+          items.push({ kind: "spawn", objective, result: "", isError: false });
+          if (callId) spawnMap.set(callId, idx);
+        } else {
+          const idx = items.length;
+          items.push({ kind: "tool", name: toolName, status: "pending" });
+          if (callId) toolCallMap.set(callId, idx);
+        }
+      }
+
+      if (event.type === "tool_result") {
+        const payload  = asObject(event.content);
+        const callId   = typeof payload.tool_use_id === "string" ? payload.tool_use_id : "";
+        const isError  = Boolean(payload.is_error);
+
+        if (callId && spawnMap.has(callId)) {
+          const item = items[spawnMap.get(callId)!] as { kind: "spawn"; result: string; isError: boolean };
+          item.result  = compact(payload.result, 300) || "completed";
+          item.isError = isError;
+        } else if (callId && toolCallMap.has(callId)) {
+          const item = items[toolCallMap.get(callId)!] as { kind: "tool"; status: string };
+          item.status = isError ? "error" : "ok";
+        }
+      }
+    }
+    return items;
+  });
 
   // ── Effects ──────────────────────────────────────────────────────────────────
 
@@ -437,6 +491,23 @@
         .join(" ").toLowerCase();
       return hay.includes(q);
     });
+  }
+
+  // ── Tool label map (output view) ─────────────────────────────────────────────
+
+  function toolLabel(name: string): { glyph: string; label: string } {
+    const map: Record<string, { glyph: string; label: string }> = {
+      memory_save:           { glyph: "⬡", label: "saved to memory" },
+      memory_search:         { glyph: "⬡", label: "searched memory" },
+      search_knowledge_base: { glyph: "◈", label: "searched knowledge base" },
+      search_apis:           { glyph: "◈", label: "searched API catalog" },
+      read_file:             { glyph: "◉", label: "read file" },
+      write_file:            { glyph: "◉", label: "wrote file" },
+      edit_file:             { glyph: "◉", label: "edited file" },
+      run_command:           { glyph: "⟩", label: "ran command" },
+      spawn_agent:           { glyph: "⊕", label: "delegated sub-task" },
+    };
+    return map[name] ?? { glyph: "◬", label: name };
   }
 
   // ── Navigation helpers ────────────────────────────────────────────────────────
@@ -892,139 +963,269 @@
         <p class="section-desc">Live event stream, tool registry, and sub-agent delegation tree from the last run.</p>
       </div>
 
-      <div class="two-col">
-
-        <!-- Event feed + stats -->
-        <section class="card">
-          <h2 class="card-heading">
-            <span class="heading-glyph">◬</span> Event Feed
-          </h2>
-
-          <!-- Stats -->
-          <div class="stats-grid">
-            <div class="stat-card">
-              <span class="stat-label">Events</span>
-              <span class="stat-value">{runStats.total}</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-label">Text</span>
-              <span class="stat-value">{runStats.text}</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-label">Tool calls</span>
-              <span class="stat-value">{runStats.toolUse}</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-label">Results</span>
-              <span class="stat-value">{runStats.toolResult}</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-label">Errors</span>
-              <span class="stat-value {statValueClass('errors', runStats.errors)}">{runStats.errors}</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-label">Status</span>
-              <span class="stat-value {statValueClass('status', runStats.status)}" style="font-size: 1rem; padding-top: 6px;">{runStats.status}</span>
-            </div>
-          </div>
-
-          <!-- Tool registry chips -->
-          {#if runToolRegistry.length > 0}
-            <div class="chip-row" style="margin-bottom: 10px;">
-              {#each runToolRegistry as tool (tool)}
-                <span class="chip">{tool}</span>
-              {/each}
-            </div>
-          {/if}
-
-          <!-- Live event panel -->
-          <div class="panel panel-tall">
-            {#if runEventViews.length === 0}
-              <span class="muted">No run events yet — delegate a task to see the stream.</span>
-            {:else}
-              {#each runEventViews as item (item.id)}
-                {@const isLong = item.fullDetail.length > 260}
-                {@const isExpanded = expandedEvents.has(item.id)}
-                <article class="event-row" data-severity={item.severity}>
-                  <div class="event-header">
-                    <span class="event-type-tag">{item.type}</span>
-                    {#if item.timestamp}
-                      <span class="event-time">{prettyDate(item.timestamp)}</span>
-                    {/if}
-                  </div>
-                  <strong class="event-title">{item.title}</strong>
-                  <p class="event-detail" class:clamped={isLong && !isExpanded}>
-                    {isExpanded ? item.fullDetail : item.detail}
-                  </p>
-                  {#if isLong}
-                    <button type="button" class="event-expand" onclick={() => toggleExpand(item.id)}>
-                      {isExpanded ? "▲ collapse" : "▼ show more"}
-                    </button>
-                  {/if}
-                </article>
-              {/each}
-
-              <!-- Live composing indicator: replaces text_delta flood -->
-              {#if busy && liveTypingText}
-                <div class="composing-block">
-                  <div class="composing-header">
-                    <span class="composing-dot"></span>
-                    <span class="composing-dot"></span>
-                    <span class="composing-dot"></span>
-                    <span class="composing-label">Mind composing</span>
-                  </div>
-                  <p class="composing-text">{liveTypingText}</p>
-                </div>
-              {:else if busy}
-                <div class="composing-block composing-idle">
-                  <div class="composing-header">
-                    <span class="composing-dot"></span>
-                    <span class="composing-dot"></span>
-                    <span class="composing-dot"></span>
-                    <span class="composing-label">Mind is working</span>
-                  </div>
-                </div>
-              {/if}
-            {/if}
-          </div>
-        </section>
-
-        <!-- Delegation tree + memory context -->
-        <section class="card">
-          <h2 class="card-heading">
-            <span class="heading-glyph">⊕</span> Delegation Tree
-          </h2>
-
-          <div class="panel">
-            {#if spawnRuns.length === 0}
-              <span class="muted">No sub-agent delegation detected in this run.</span>
-            {:else}
-              {#each spawnRuns as run (run.callId)}
-                <article class="spawn-card" data-error={run.isError}>
-                  <div class="spawn-head">
-                    <span class="spawn-id">{run.callId}</span>
-                    <span class="spawn-turns">max_turns={run.maxTurns}</span>
-                  </div>
-                  <p><strong>Objective:</strong> {run.objective}</p>
-                  <p><strong>Result:</strong> {run.result}</p>
-                </article>
-              {/each}
-            {/if}
-          </div>
-
-          <p class="subheading">Memory context used</p>
-          <div class="chip-row">
-            {#if runMemoryContextIds.length === 0}
-              <span class="muted" style="padding: 0; text-align: left;">No memory_context event captured.</span>
-            {:else}
-              {#each runMemoryContextIds as memId (memId)}
-                <span class="chip">{memId}</span>
-              {/each}
-            {/if}
-          </div>
-        </section>
-
+      <!-- View toggle -->
+      <div class="view-toggle-bar">
+        <span class="toggle-label" class:toggle-label-active={viewMode === "output"}>Output</span>
+        <button
+          type="button"
+          class="toggle-pill"
+          class:toggled={viewMode === "debug"}
+          onclick={() => (viewMode = viewMode === "output" ? "debug" : "output")}
+          aria-label="Switch between output and debug view"
+        >
+          <span class="toggle-knob"></span>
+        </button>
+        <span class="toggle-label" class:toggle-label-active={viewMode === "debug"}>Debug</span>
       </div>
+
+      <!-- ── OUTPUT view ── -->
+      {#if viewMode === "output"}
+        <div class="output-layout">
+
+          <!-- Mind response stream -->
+          <section class="card output-main">
+            <h2 class="card-heading">
+              <span class="heading-glyph">◉</span> Mind Response
+              {#if busy}
+                <span class="heading-live">
+                  <span class="live-orb" style="width: 7px; height: 7px;"></span>
+                  live
+                </span>
+              {:else if runStats.status === "completed"}
+                <span class="heading-status-ok">✓ done</span>
+              {:else if runStats.status === "failed" || runStats.status === "error"}
+                <span class="heading-status-err">✗ failed</span>
+              {/if}
+            </h2>
+
+            <div class="output-feed">
+              {#if runOutputItems.length === 0 && !busy}
+                <span class="muted">No output yet — delegate a task to see what this Mind produces.</span>
+              {:else}
+                {#each runOutputItems as item, i (i)}
+                  {#if item.kind === "text"}
+                    <div class="output-text-block">
+                      <p class="output-text">{item.content}</p>
+                    </div>
+                  {:else if item.kind === "tool"}
+                    {@const tl = toolLabel(item.name)}
+                    <div class="activity-pill" data-status={item.status}>
+                      <span class="activity-glyph">{tl.glyph}</span>
+                      <span class="activity-label">{tl.label}</span>
+                      {#if item.status === "error"}
+                        <span class="activity-err">failed</span>
+                      {:else if item.status === "pending"}
+                        <span class="activity-pending">…</span>
+                      {/if}
+                    </div>
+                  {:else if item.kind === "spawn"}
+                    <div class="spawn-output" data-error={item.isError}>
+                      <div class="spawn-output-head">
+                        <span class="spawn-output-glyph">⊕</span>
+                        <span class="spawn-output-label">Sub-task delegated</span>
+                      </div>
+                      <p class="spawn-output-objective">{item.objective}</p>
+                      {#if item.result}
+                        <p class="spawn-output-result">{item.result}</p>
+                      {:else if busy}
+                        <span class="spawn-output-running">
+                          <span class="composing-dot"></span>
+                          <span class="composing-dot"></span>
+                          <span class="composing-dot"></span>
+                          running…
+                        </span>
+                      {/if}
+                    </div>
+                  {/if}
+                {/each}
+
+                <!-- Live composing indicator -->
+                {#if busy && liveTypingText}
+                  <div class="composing-block">
+                    <div class="composing-header">
+                      <span class="composing-dot"></span>
+                      <span class="composing-dot"></span>
+                      <span class="composing-dot"></span>
+                      <span class="composing-label">composing</span>
+                    </div>
+                    <p class="composing-text">{liveTypingText}</p>
+                  </div>
+                {:else if busy}
+                  <div class="composing-block composing-idle">
+                    <div class="composing-header">
+                      <span class="composing-dot"></span>
+                      <span class="composing-dot"></span>
+                      <span class="composing-dot"></span>
+                      <span class="composing-label">working</span>
+                    </div>
+                  </div>
+                {/if}
+              {/if}
+            </div>
+          </section>
+
+          <!-- Side panel: memories used + status -->
+          <aside class="card output-side">
+            <h2 class="card-heading">
+              <span class="heading-glyph">⬡</span> Context used
+            </h2>
+            {#if runMemoryContextIds.length === 0}
+              <span class="muted" style="font-size: 0.84rem;">No memories were loaded for this run.</span>
+            {:else}
+              <p style="font-size: 0.84rem; color: var(--ink-2); margin-bottom: 10px;">
+                {runMemoryContextIds.length} memory {runMemoryContextIds.length === 1 ? "entry" : "entries"} informed this response.
+              </p>
+              <div class="chip-row">
+                {#each runMemoryContextIds as memId (memId)}
+                  <span class="chip">{memId}</span>
+                {/each}
+              </div>
+            {/if}
+
+            {#if runToolRegistry.length > 0}
+              <p class="subheading">Tools available</p>
+              <div class="chip-row">
+                {#each runToolRegistry as tool (tool)}
+                  <span class="chip">{tool}</span>
+                {/each}
+              </div>
+            {/if}
+          </aside>
+
+        </div>
+
+      <!-- ── DEBUG view ── -->
+      {:else}
+        <div class="two-col">
+
+          <!-- Raw event feed + stats -->
+          <section class="card">
+            <h2 class="card-heading">
+              <span class="heading-glyph">◬</span> Event Feed
+            </h2>
+
+            <div class="stats-grid">
+              <div class="stat-card">
+                <span class="stat-label">Events</span>
+                <span class="stat-value">{runStats.total}</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">Text</span>
+                <span class="stat-value">{runStats.text}</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">Tool calls</span>
+                <span class="stat-value">{runStats.toolUse}</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">Results</span>
+                <span class="stat-value">{runStats.toolResult}</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">Errors</span>
+                <span class="stat-value {statValueClass('errors', runStats.errors)}">{runStats.errors}</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-label">Status</span>
+                <span class="stat-value {statValueClass('status', runStats.status)}" style="font-size: 1rem; padding-top: 6px;">{runStats.status}</span>
+              </div>
+            </div>
+
+            {#if runToolRegistry.length > 0}
+              <div class="chip-row" style="margin-bottom: 10px;">
+                {#each runToolRegistry as tool (tool)}
+                  <span class="chip">{tool}</span>
+                {/each}
+              </div>
+            {/if}
+
+            <div class="panel panel-tall">
+              {#if runEventViews.length === 0}
+                <span class="muted">No run events yet — delegate a task to see the stream.</span>
+              {:else}
+                {#each runEventViews as item (item.id)}
+                  {@const isLong = item.fullDetail.length > 260}
+                  {@const isExpanded = expandedEvents.has(item.id)}
+                  <article class="event-row" data-severity={item.severity}>
+                    <div class="event-header">
+                      <span class="event-type-tag">{item.type}</span>
+                      {#if item.timestamp}
+                        <span class="event-time">{prettyDate(item.timestamp)}</span>
+                      {/if}
+                    </div>
+                    <strong class="event-title">{item.title}</strong>
+                    <p class="event-detail" class:clamped={isLong && !isExpanded}>
+                      {isExpanded ? item.fullDetail : item.detail}
+                    </p>
+                    {#if isLong}
+                      <button type="button" class="event-expand" onclick={() => toggleExpand(item.id)}>
+                        {isExpanded ? "▲ collapse" : "▼ show more"}
+                      </button>
+                    {/if}
+                  </article>
+                {/each}
+
+                {#if busy && liveTypingText}
+                  <div class="composing-block">
+                    <div class="composing-header">
+                      <span class="composing-dot"></span>
+                      <span class="composing-dot"></span>
+                      <span class="composing-dot"></span>
+                      <span class="composing-label">Mind composing</span>
+                    </div>
+                    <p class="composing-text">{liveTypingText}</p>
+                  </div>
+                {:else if busy}
+                  <div class="composing-block composing-idle">
+                    <div class="composing-header">
+                      <span class="composing-dot"></span>
+                      <span class="composing-dot"></span>
+                      <span class="composing-dot"></span>
+                      <span class="composing-label">Mind is working</span>
+                    </div>
+                  </div>
+                {/if}
+              {/if}
+            </div>
+          </section>
+
+          <!-- Delegation tree + memory context -->
+          <section class="card">
+            <h2 class="card-heading">
+              <span class="heading-glyph">⊕</span> Delegation Tree
+            </h2>
+
+            <div class="panel">
+              {#if spawnRuns.length === 0}
+                <span class="muted">No sub-agent delegation detected in this run.</span>
+              {:else}
+                {#each spawnRuns as run (run.callId)}
+                  <article class="spawn-card" data-error={run.isError}>
+                    <div class="spawn-head">
+                      <span class="spawn-id">{run.callId}</span>
+                      <span class="spawn-turns">max_turns={run.maxTurns}</span>
+                    </div>
+                    <p><strong>Objective:</strong> {run.objective}</p>
+                    <p><strong>Result:</strong> {run.result}</p>
+                  </article>
+                {/each}
+              {/if}
+            </div>
+
+            <p class="subheading">Memory context used</p>
+            <div class="chip-row">
+              {#if runMemoryContextIds.length === 0}
+                <span class="muted" style="padding: 0; text-align: left;">No memory_context event captured.</span>
+              {:else}
+                {#each runMemoryContextIds as memId (memId)}
+                  <span class="chip">{memId}</span>
+                {/each}
+              {/if}
+            </div>
+          </section>
+
+        </div>
+      {/if}
     </div>
 
     <!-- ════════════════════════════════════════
@@ -1082,43 +1283,73 @@
           </div>
         </section>
 
-        <!-- Trace replay -->
+        <!-- Trace replay / Task result -->
         <section class="card">
           <h2 class="card-heading">
-            <span class="heading-glyph">◬</span> Trace Replay
+            <span class="heading-glyph">{viewMode === "output" ? "◉" : "◬"}</span>
+            {viewMode === "output" ? "Task Result" : "Trace Replay"}
             {#if selectedTaskId}
               <span style="font-family: var(--font-mono); font-size: 0.62rem; color: var(--ink-3); margin-left: 4px; font-weight: normal; letter-spacing: 0;">({selectedTaskId})</span>
             {/if}
           </h2>
 
-          <div class="panel panel-tall">
-            {#if !trace}
-              <span class="muted">Select a task to inspect its persisted event trace.</span>
-            {:else}
-              {#each traceEventViews as item (item.id)}
-                {@const traceId = `t-${item.id}`}
-                {@const isLong = item.fullDetail.length > 260}
-                {@const isExpanded = expandedEvents.has(traceId)}
-                <article class="event-row" data-severity={item.severity}>
-                  <div class="event-header">
-                    <span class="event-type-tag">{item.type}</span>
-                    {#if item.timestamp}
-                      <span class="event-time">{prettyDate(item.timestamp)}</span>
-                    {/if}
+          {#if viewMode === "output"}
+            <!-- Output view: show the task result text prominently -->
+            <div class="panel panel-tall">
+              {#if !trace}
+                <span class="muted">Select a task to see what the Mind produced.</span>
+              {:else}
+                {@const selectedTask = tasks.find((t) => t.id === selectedTaskId)}
+                {#if selectedTask?.result}
+                  <div class="output-text-block">
+                    <p class="output-text">{selectedTask.result}</p>
                   </div>
-                  <strong class="event-title">{item.title}</strong>
-                  <p class="event-detail" class:clamped={isLong && !isExpanded}>
-                    {isExpanded ? item.fullDetail : item.detail}
-                  </p>
-                  {#if isLong}
-                    <button type="button" class="event-expand" onclick={() => toggleExpand(traceId)}>
-                      {isExpanded ? "▲ collapse" : "▼ show more"}
-                    </button>
+                {:else}
+                  <!-- Fall back to text events from trace -->
+                  {@const textEvents = traceEventViews.filter((e) => e.type === "text")}
+                  {#if textEvents.length > 0}
+                    {#each textEvents as item (item.id)}
+                      <div class="output-text-block">
+                        <p class="output-text">{item.fullDetail}</p>
+                      </div>
+                    {/each}
+                  {:else}
+                    <span class="muted">No text output was captured for this task.</span>
                   {/if}
-                </article>
-              {/each}
-            {/if}
-          </div>
+                {/if}
+              {/if}
+            </div>
+          {:else}
+            <!-- Debug view: full raw event trace -->
+            <div class="panel panel-tall">
+              {#if !trace}
+                <span class="muted">Select a task to inspect its persisted event trace.</span>
+              {:else}
+                {#each traceEventViews as item (item.id)}
+                  {@const traceId = `t-${item.id}`}
+                  {@const isLong = item.fullDetail.length > 260}
+                  {@const isExpanded = expandedEvents.has(traceId)}
+                  <article class="event-row" data-severity={item.severity}>
+                    <div class="event-header">
+                      <span class="event-type-tag">{item.type}</span>
+                      {#if item.timestamp}
+                        <span class="event-time">{prettyDate(item.timestamp)}</span>
+                      {/if}
+                    </div>
+                    <strong class="event-title">{item.title}</strong>
+                    <p class="event-detail" class:clamped={isLong && !isExpanded}>
+                      {isExpanded ? item.fullDetail : item.detail}
+                    </p>
+                    {#if isLong}
+                      <button type="button" class="event-expand" onclick={() => toggleExpand(traceId)}>
+                        {isExpanded ? "▲ collapse" : "▼ show more"}
+                      </button>
+                    {/if}
+                  </article>
+                {/each}
+              {/if}
+            </div>
+          {/if}
         </section>
 
       </div>
