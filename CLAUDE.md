@@ -90,14 +90,19 @@ Culture Engine is a monorepo with a FastAPI backend and a frontend client. The c
 
 ```
 POST /api/minds/{mind_id}/delegate (SSE stream)
-  └─ mind.pipeline.delegate_to_mind()
-       ├─ load Mind profile + memory from SQLite
-       ├─ compose per-run tools (shared tools + memory + spawn_agent)
-       ├─ run_agent() streams tool/text/result events
-       └─ persist task status, trace events, and memory entries
+  └─ main.py handler (thin HTTP adapter)
+       └─ MindService.delegate()
+            └─ mind.pipeline.delegate_to_mind()  (raw dict stream)
+                 ├─ load Mind profile + memory from SQLite
+                 ├─ compose per-run tools (shared tools + memory + spawn_agent)
+                 ├─ run_agent() streams tool/text/result events
+                 └─ persist task status, trace events, and memory entries
+            └─ EventStream wraps raw dicts → Event objects
 ```
 
-All responses are SSE events with shape `{"type": "...", "content": ...}`. Common Mind event types: `task_started`, `tool_registry`, `tool_use`, `tool_result`, `text`, `result`, `task_finished`, `error`.
+All business logic lives in `MindService` (`mind/service.py`). HTTP handlers in `main.py` are thin adapters that catch domain exceptions (`MindNotFoundError`, `TaskNotFoundError`, `ValidationError`) and translate them to `HTTPException`. This makes the service layer reusable by future transports (WebSocket, MCP, CLI).
+
+SSE events use a typed `Event` envelope: `{"id": ..., "type": ..., "seq": ..., "ts": ..., "trace_id": ..., "content": ...}`. The `type` and `content` fields are unchanged from the original format. The additional fields (`id`, `seq`, `ts`, `trace_id`) are additive. Common event types: `task_started`, `tool_registry`, `tool_use`, `tool_result`, `text`, `result`, `task_finished`, `error`.
 
 ### Key Packages (`src/backend/`)
 
@@ -107,6 +112,9 @@ All responses are SSE events with shape `{"type": "...", "content": ...}`. Commo
 | `agents/tools.py` | `DEFAULT_TOOL_NAMES` — central allowlist; file read/write/edit, run_command, search_apis, search_knowledge_base |
 | `agents/api_catalog.py` | Searchable catalog of service actions |
 | `agents/kb_search.py` | Keyword search over KB markdown sections |
+| `mind/service.py` | `MindService` — protocol-agnostic service layer; all business logic for CRUD, feedback, delegation, tasks, drones, memory |
+| `mind/events.py` | `Event` model (typed envelope) + `EventStream` wrapper that enriches raw pipeline dicts |
+| `mind/exceptions.py` | Domain exceptions (`MindNotFoundError`, `TaskNotFoundError`, `ValidationError`) |
 | `mind/schema.py` | `MindProfile`, `Task`, `MemoryEntry` models |
 | `mind/pipeline.py` | `delegate_to_mind()` — task run orchestration and persistence |
 | `mind/reasoning.py` | Mind system prompt composition + agent execution |

@@ -29,16 +29,19 @@ Root scripts (`package.json`):
 Main concept: user delegates tasks to a persistent **Mind**.
 
 Current backend endpoints:
+- `GET /api/health`
 - `POST /api/minds`
-- `PATCH /api/minds/{id}`
-- `GET /api/minds/{id}`
-- `POST /api/minds/{id}/feedback`
-- `POST /api/minds/{id}/delegate` (SSE)
-- `GET /api/minds/{id}/tasks`
-- `GET /api/minds/{id}/tasks/{task_id}`
-- `GET /api/minds/{id}/tasks/{task_id}/drones`
-- `GET /api/minds/{id}/drones/{drone_id}/trace`
-- `GET /api/minds/{id}/memory`
+- `GET /api/minds`
+- `GET /api/minds/{mind_id}`
+- `PATCH /api/minds/{mind_id}`
+- `POST /api/minds/{mind_id}/feedback`
+- `POST /api/minds/{mind_id}/delegate` (SSE)
+- `GET /api/minds/{mind_id}/tasks`
+- `GET /api/minds/{mind_id}/tasks/{task_id}`
+- `GET /api/minds/{mind_id}/tasks/{task_id}/drones`
+- `GET /api/minds/{mind_id}/tasks/{task_id}/trace`
+- `GET /api/minds/{mind_id}/drones/{drone_id}/trace`
+- `GET /api/minds/{mind_id}/memory`
 
 Phase 1 scope intentionally simplified:
 - single-path orchestration (no automatic sub-agent splitting)
@@ -56,7 +59,7 @@ Only archived workflow JSON artifacts remain under `apps/workflows/`.
 ### Stable shared layer
 - `agents/base.py` — shared `run_agent(...)` wrapper over `pi-agent-core`
 - `agents/anthropic_stream.py` — Anthropic/OpenRouter stream adapter
-- SSE event contract (`type` + `content`) must remain compatible
+- SSE event contract (`type` + `content`) must remain compatible; new envelope fields are additive only
 
 ### Culture Engine layer
 - `mind/schema.py` — Mind/Drone/Task/Memory models
@@ -64,7 +67,10 @@ Only archived workflow JSON artifacts remain under `apps/workflows/`.
 - `mind/identity.py` — Mind creation helpers
 - `mind/memory.py` — SQLite-backed memory manager with FTS5 search
 - `mind/store.py` — SQLite-backed profile + task persistence
-- `main.py` → `_migrate_legacy_json()` — one-time migration from legacy JSON files into SQLite (runs in lifespan handler, marker-file guarded)
+- `mind/events.py` — canonical event envelope (`id`, `seq`, `ts`, `trace_id`) + stream wrapper
+- `mind/exceptions.py` — protocol-agnostic domain exceptions for Mind operations
+- `mind/service.py` — protocol-agnostic Mind service layer used by HTTP handlers
+- `main.py` — HTTP adapter + `_migrate_legacy_json()` one-time migration (lifespan handler, marker-file guarded)
 - `mind/reasoning.py` — dynamic system prompt + agent execution
 - `mind/orchestrator.py` — simplified single-run orchestrator
 - `mind/pipeline.py` — delegate flow (load memory → execute → persist)
@@ -85,6 +91,7 @@ Only archived workflow JSON artifacts remain under `apps/workflows/`.
 4. Create directories only on write paths (not on reads).
 5. Keep temporary workspace lifecycle automatic and bounded.
 6. Preserve backward compatibility unless explicitly removed.
+7. Keep transport handlers thin; put domain logic in `mind/service.py`.
 
 ---
 
@@ -137,7 +144,7 @@ npm run dev
 
 - Keep tool names in snake_case.
 - Maintain workspace path safety for file tools.
-- Preserve SSE message compatibility.
+- Preserve SSE message compatibility (`type` + `content` required; envelope fields are additive).
 - Keep docs aligned with implementation in `src/backend/`.
 - Mark legacy codepaths clearly with `LEGACY` comments/docstrings.
 
