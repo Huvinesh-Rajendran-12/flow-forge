@@ -4,23 +4,29 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
-import re
+from tempfile import TemporaryDirectory
+from typing import Any
 
+from ..agents.base import run_agent
+from .config import (
+    DEFAULT_MEMORY_SAVE_MAX_CALLS,
+    DEFAULT_MIND_MAX_TURNS,
+    DEFAULT_SPAWN_MAX_CALLS,
+    DEFAULT_SPAWN_MAX_TURNS,
+    MAX_AUTOSAVE_INSIGHTS_PER_RUN,
+    MAX_AUTOSAVE_MEMORIES_PER_RUN,
+    MAX_FEEDBACK_CONTEXT_ITEMS,
+    MAX_IMPLICIT_CONTEXT_ITEMS,
+    MAX_INSIGHT_CONTEXT_ITEMS,
+    MAX_MEMORY_CONTEXT_ITEMS,
+    MAX_STREAM_EVENTS,
+    MAX_TEXT_DELTA_EVENTS,
+)
 from .memory import MemoryManager
-from .orchestrator import execute_task
-from .schema import MemoryEntry, Task
+from .reasoning import build_system_prompt
+from .schema import Drone, MemoryEntry, MindProfile, Task
 from .store import MindStore
-
-MAX_STREAM_EVENTS = 250
-MAX_TEXT_DELTA_EVENTS = 4000
-MAX_AUTOSAVE_MEMORIES_PER_RUN = 1
-MAX_AUTOSAVE_INSIGHTS_PER_RUN = 1
-MAX_MEMORY_CONTEXT_ITEMS = 16
-MAX_FEEDBACK_CONTEXT_ITEMS = 4
-MAX_IMPLICIT_CONTEXT_ITEMS = 4
-MAX_INSIGHT_CONTEXT_ITEMS = 4
-IMPLICIT_FOLLOWUP_WINDOW_SECONDS = 15 * 60
-IMPLICIT_SIMILARITY_THRESHOLD = 0.3
+from .tools import create_mind_tools, tool_names
 
 
 def _merge_memory_context(
@@ -50,96 +56,6 @@ def _event_type_counts(events: list[dict]) -> dict[str, int]:
         if isinstance(event_type, str):
             counts[event_type] = counts.get(event_type, 0) + 1
     return counts
-
-
-def _tokenize(text: str) -> set[str]:
-    return {token for token in re.findall(r"[a-z0-9]+", text.lower()) if len(token) > 2}
-
-
-def _text_similarity(left: str, right: str) -> float:
-    left_tokens = _tokenize(left)
-    right_tokens = _tokenize(right)
-
-    if not left_tokens or not right_tokens:
-        return 0.0
-
-    overlap = left_tokens & right_tokens
-    universe = left_tokens | right_tokens
-    return len(overlap) / len(universe)
-
-
-def _infer_implicit_feedback(
-    *,
-    mind_store: MindStore,
-    mind_id: str,
-    current_task: Task,
-) -> MemoryEntry | None:
-    recent_tasks = [
-        task for task in mind_store.list_tasks(mind_id) if task.id != current_task.id
-    ]
-    if not recent_tasks:
-        return None
-
-    previous_task = recent_tasks[0]
-    similarity = _text_similarity(current_task.description, previous_task.description)
-    seconds_since_previous = (
-        current_task.created_at - previous_task.created_at
-    ).total_seconds()
-
-    lines = [
-        "Inferred implicit feedback from user behavior:",
-        f"- Previous task: {previous_task.id} ({previous_task.status})",
-        f"- Current task: {current_task.id}",
-        f"- Similarity: {similarity:.2f}",
-    ]
-
-    keywords = {"implicit_feedback", "behavior_signal", "learning"}
-
-    if previous_task.status == "failed":
-        lines.append("- Signal: user retried after failure.")
-        lines.append(
-            "- Inference: prioritize resilience, faster checkpoints, and clearer completion signals."
-        )
-        keywords.update({"retry_after_failure", "reliability_expectation"})
-
-        if similarity >= IMPLICIT_SIMILARITY_THRESHOLD:
-            keywords.add("same_topic_retry")
-
-        return MemoryEntry(
-            mind_id=mind_id,
-            content="\n".join(lines),
-            category="implicit_feedback",
-            relevance_keywords=sorted(keywords),
-        )
-
-    if (
-        previous_task.status == "completed"
-        and seconds_since_previous <= IMPLICIT_FOLLOWUP_WINDOW_SECONDS
-        and similarity >= IMPLICIT_SIMILARITY_THRESHOLD
-    ):
-        lines.append("- Signal: user started a quick follow-up on a similar task.")
-        lines.append(
-            "- Inference: previous answer likely needed refinement; improve specificity and actionable structure."
-        )
-        keywords.update({"rapid_followup", "refinement_signal"})
-
-        return MemoryEntry(
-            mind_id=mind_id,
-            content="\n".join(lines),
-            category="implicit_feedback",
-            relevance_keywords=sorted(keywords),
-        )
-
-    return None
-
-
-def _save_if_new(memory_manager: MemoryManager, entry: MemoryEntry) -> bool:
-    existing = memory_manager.list_all(entry.mind_id, category=entry.category)
-    if existing and existing[-1].content == entry.content:
-        return False
-
-    memory_manager.save(entry)
-    return True
 
 
 def _compact_text(value: str | None, *, limit: int = 240) -> str:
@@ -190,6 +106,165 @@ def _build_autonomous_insight(
         lines.append(f"- Implicit signals considered: {implicit_context_count}")
 
     return "\n".join(lines), sorted(set(keywords))
+
+
+def _build_runtime_manifest(
+    *,
+    team: str,
+    tools: list[str],
+    max_turns: int,
+    include_spawn_agent: bool,
+    stream_event_limit: int | None,
+    text_delta_event_limit: int | None,
+    autosave_memory_limit: int | None,
+) -> dict[str, Any]:
+    return {
+        "team": team,
+        "tool_names": tools,
+        "limits": {
+            "max_turns": max_turns,
+            "memory_save_max_calls": DEFAULT_MEMORY_SAVE_MAX_CALLS,
+            "spawn_agent_max_calls": DEFAULT_SPAWN_MAX_CALLS
+            if include_spawn_agent
+            else 0,
+            "spawn_agent_max_turns": DEFAULT_SPAWN_MAX_TURNS
+            if include_spawn_agent
+            else 0,
+            "stream_event_limit": stream_event_limit,
+            "text_delta_event_limit": text_delta_event_limit,
+            "autosave_memories_per_run": autosave_memory_limit,
+        },
+        "architecture_notes": [
+            "Single-path orchestration per delegation run.",
+            "Sub-agents are explicit via spawn_agent; no implicit auto-splitting.",
+            "Task traces and memories are persisted to SQLite for continuity.",
+        ],
+    }
+
+
+async def execute_task(
+    *,
+    mind: MindProfile,
+    task: str,
+    task_id: str,
+    team: str,
+    memories: list[MemoryEntry],
+    memory_manager: MemoryManager,
+    mind_store: MindStore,
+    stream_event_limit: int | None = None,
+    text_delta_event_limit: int | None = None,
+    autosave_memory_limit: int | None = None,
+) -> AsyncGenerator[dict, None]:
+    """Execute one task with one Mind run.
+
+    Note: automatic orchestration is intentionally minimal.
+    Sub-agents are available only through the explicit spawn_agent tool.
+    """
+    with TemporaryDirectory(prefix="mind-") as workspace:
+
+        async def _spawn_agent(objective: str, max_turns: int) -> str:
+            drone = Drone(
+                mind_id=mind.id,
+                task_id=task_id,
+                objective=objective,
+                status="running",
+            )
+            mind_store.save_drone(drone)
+
+            chunks: list[str] = []
+            trace_events: list[dict] = []
+
+            try:
+                with TemporaryDirectory(prefix="drone-") as drone_workspace:
+                    drone_tools = create_mind_tools(
+                        team=team,
+                        workspace_dir=drone_workspace,
+                        memory_manager=memory_manager,
+                        mind_id=mind.id,
+                        spawn_agent_fn=_spawn_agent,
+                        include_spawn_agent=False,
+                    )
+                    drone_tool_names = tool_names(drone_tools)
+                    drone_manifest = _build_runtime_manifest(
+                        team=team,
+                        tools=drone_tool_names,
+                        max_turns=max_turns,
+                        include_spawn_agent=False,
+                        stream_event_limit=stream_event_limit,
+                        text_delta_event_limit=text_delta_event_limit,
+                        autosave_memory_limit=autosave_memory_limit,
+                    )
+
+                    async for event in run_agent(
+                        prompt=f"[Drone Objective] {objective}",
+                        system_prompt=build_system_prompt(
+                            mind, memories, drone_manifest
+                        ),
+                        workspace_dir=drone_workspace,
+                        team=team,
+                        tools_override=drone_tools,
+                        allowed_tools=drone_tool_names,
+                        max_turns=max_turns,
+                    ):
+                        trace_events.append(event)
+                        if event.get("type") == "text" and isinstance(
+                            event.get("content"), str
+                        ):
+                            chunks.append(event["content"])
+
+                result = (
+                    "\n".join(chunks[-3:])
+                    if chunks
+                    else "Sub-agent completed with no textual output."
+                )
+                drone.status = "completed"
+                drone.result = result
+            except Exception as exc:
+                result = f"Drone failed: {exc}"
+                drone.status = "failed"
+                drone.result = result
+            finally:
+                drone.completed_at = datetime.now(timezone.utc)
+                mind_store.save_drone(drone)
+                mind_store.save_drone_trace(mind.id, drone.id, trace_events)
+
+            return result
+
+        tools = create_mind_tools(
+            team=team,
+            workspace_dir=workspace,
+            memory_manager=memory_manager,
+            mind_id=mind.id,
+            spawn_agent_fn=_spawn_agent,
+            include_spawn_agent=True,
+        )
+        tools_for_run = tool_names(tools)
+        runtime_manifest = _build_runtime_manifest(
+            team=team,
+            tools=tools_for_run,
+            max_turns=DEFAULT_MIND_MAX_TURNS,
+            include_spawn_agent=True,
+            stream_event_limit=stream_event_limit,
+            text_delta_event_limit=text_delta_event_limit,
+            autosave_memory_limit=autosave_memory_limit,
+        )
+
+        yield {
+            "type": "tool_registry",
+            "content": {
+                "tools": tools_for_run,
+            },
+        }
+
+        async for event in run_agent(
+            prompt=task,
+            system_prompt=build_system_prompt(mind, memories, runtime_manifest),
+            workspace_dir=workspace,
+            team=team,
+            tools_override=tools,
+            max_turns=DEFAULT_MIND_MAX_TURNS,
+        ):
+            yield event
 
 
 async def delegate_to_mind(
@@ -271,24 +346,6 @@ async def delegate_to_mind(
     }
     _record(start_event)
     yield start_event
-
-    inferred_implicit = _infer_implicit_feedback(
-        mind_store=mind_store,
-        mind_id=mind_id,
-        current_task=task,
-    )
-
-    if inferred_implicit and _save_if_new(memory_manager, inferred_implicit):
-        implicit_event = {
-            "type": "implicit_feedback_inferred",
-            "content": {
-                "id": inferred_implicit.id,
-                "mind_id": mind_id,
-                "category": "implicit_feedback",
-            },
-        }
-        _record(implicit_event)
-        yield implicit_event
 
     searched_memories = memory_manager.search(mind_id, description, top_k=8)
     feedback_memories = memory_manager.list_all(mind_id, category="user_feedback")[

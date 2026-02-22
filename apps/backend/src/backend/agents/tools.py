@@ -369,8 +369,3 @@ def create_culture_engine_tools(team: str, workspace_dir: str) -> list[AgentTool
             execute=search_kb_execute,
         ),
     ]
-
-
-def create_flowforge_tools(team: str, workspace_dir: str) -> list[AgentTool]:
-    """Backward-compatible alias for the pre-rename tool factory."""
-    return create_culture_engine_tools(team=team, workspace_dir=workspace_dir)

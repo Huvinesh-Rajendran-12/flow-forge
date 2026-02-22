@@ -67,7 +67,7 @@ For each delegation run, system prompting includes:
 
 Learning loop:
 - explicit user feedback can be stored via `POST /api/minds/{mind_id}/feedback`
-- implicit preference signals are inferred from behavior (profile updates, rapid similar follow-ups, retry-after-failure)
+- implicit preference signals are inferred from profile updates
 - each run saves a `mind_insight` memory with adaptation notes
 
 Current per-run toolset:

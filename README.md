@@ -54,7 +54,7 @@ npm run dev
 - `GET /api/minds/{mind_id}/tasks/{task_id}`
 - `GET /api/minds/{mind_id}/memory`
 
-Mind learning supports both explicit feedback and implicit behavioral signals.
+Mind learning supports explicit feedback plus profile-update preference signals.
 
 ### Health
 - `GET /api/health`
@@ -63,7 +63,7 @@ Mind learning supports both explicit feedback and implicit behavioral signals.
 
 ## Current Direction
 
-- **Phase 1 complete (simplified):** Mind identity + memory + reasoning + single-path orchestrator.
+- **Phase 1 complete (simplified):** Mind identity + memory + reasoning + single-path delegation pipeline.
 - **Phase 2 (simplified foundation) now in place:**
   - plain per-run tool list assembly,
   - memory primitives (`memory_save`, `memory_search`),

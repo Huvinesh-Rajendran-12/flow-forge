@@ -71,14 +71,13 @@ Only archived workflow JSON artifacts remain under `apps/workflows/`.
 - `mind/exceptions.py` — protocol-agnostic domain exceptions for Mind operations
 - `mind/service.py` — protocol-agnostic Mind service layer used by HTTP handlers
 - `main.py` — HTTP adapter + `_migrate_legacy_json()` one-time migration (lifespan handler, marker-file guarded)
+- `mind/config.py` — centralized Mind runtime limits and defaults
 - `mind/reasoning.py` — dynamic system prompt + agent execution
-- `mind/orchestrator.py` — simplified single-run orchestrator
 - `mind/pipeline.py` — delegate flow (load memory → execute → persist)
 - `mind/tools/factory.py` — plain per-run tool list assembly
 - `mind/tools/primitives.py` — Mind-specific primitives (`memory_save`, `memory_search`, `spawn_agent`)
 
-### Supporting tooling + connector layer
-- `connectors/contracts.py` — shared connector error + trace contracts
+### Supporting tooling layer
 - `agents/api_catalog.py`, `agents/kb_search.py`, `agents/tools.py`
 
 ---
@@ -168,12 +167,10 @@ When a PR gets review comments, follow this flow:
    - Preserve backward compatibility and SSE contracts.
    - Keep fixes explicit (no speculative abstractions).
 
-4. **Patterns we now enforce in connector code**
-   - Validate untrusted identifiers before file-path usage (e.g., service names for `custom_connectors`).
-   - Isolate dynamic connector instantiation failures so one bad connector does not break unrelated workflows.
-   - Fall back to custom connector file when a built-in connector's `from_settings` fails.
-   - Close `httpx.AsyncClient` instances after each workflow run (stashed in service map via `_http_client` key to prevent orphan leaks).
-   - Connector validator enforces `@classmethod` decorator on `from_settings` / `is_configured`.
+4. **Patterns we now enforce in Mind pipeline code**
+   - Keep streaming contracts stable (`type` + `content` required; envelope-only additions are OK).
+   - Keep run limits explicit and centralized in `mind/config.py`.
+   - Ensure task/drone traces are persisted on both success and failure paths.
 
 5. **Verify before shipping**
    - Run backend tests: `cd apps/backend && uv run python -m pytest`

@@ -8,12 +8,13 @@ from typing import Any
 
 from pi_agent_core import AgentTool, AgentToolResult, AgentToolSchema, TextContent
 
+from ..config import (
+    DEFAULT_MEMORY_SAVE_MAX_CALLS,
+    DEFAULT_SPAWN_MAX_CALLS,
+    DEFAULT_SPAWN_MAX_TURNS,
+)
 from ..memory import MemoryManager
 from ..schema import MemoryEntry
-
-DEFAULT_SPAWN_MAX_CALLS = 3
-DEFAULT_SPAWN_MAX_TURNS = 20
-DEFAULT_MEMORY_SAVE_MAX_CALLS = 12
 
 
 def _text_result(value: str) -> AgentToolResult:
@@ -28,7 +29,9 @@ def create_memory_tools(
 ) -> list[AgentTool]:
     memory_save_calls = 0
 
-    async def memory_save_execute(tool_call_id: str, params: dict[str, Any], **_: object) -> AgentToolResult:
+    async def memory_save_execute(
+        tool_call_id: str, params: dict[str, Any], **_: object
+    ) -> AgentToolResult:
         nonlocal memory_save_calls
         memory_save_calls += 1
 
@@ -46,7 +49,9 @@ def create_memory_tools(
         memory_manager.save(entry)
         return _text_result(f"Saved memory: {entry.id}")
 
-    async def memory_search_execute(tool_call_id: str, params: dict[str, Any], **_: object) -> AgentToolResult:
+    async def memory_search_execute(
+        tool_call_id: str, params: dict[str, Any], **_: object
+    ) -> AgentToolResult:
         query = params["query"]
         top_k = int(params.get("top_k", 5))
         results = memory_manager.search(mind_id, query, top_k=top_k)
@@ -59,8 +64,14 @@ def create_memory_tools(
             description="Save a persistent memory for this Mind.",
             parameters=AgentToolSchema(
                 properties={
-                    "content": {"type": "string", "description": "Memory content to save."},
-                    "category": {"type": "string", "description": "Optional category tag."},
+                    "content": {
+                        "type": "string",
+                        "description": "Memory content to save.",
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "Optional category tag.",
+                    },
                     "relevance_keywords": {
                         "type": "array",
                         "description": "Optional keywords used to improve retrieval.",
@@ -98,12 +109,16 @@ def create_spawn_agent_tool(
 ) -> AgentTool:
     spawn_calls = 0
 
-    async def spawn_agent_execute(tool_call_id: str, params: dict[str, Any], **_: object) -> AgentToolResult:
+    async def spawn_agent_execute(
+        tool_call_id: str, params: dict[str, Any], **_: object
+    ) -> AgentToolResult:
         nonlocal spawn_calls
 
         spawn_calls += 1
         if spawn_calls > max_calls:
-            return _text_result(f"spawn_agent call limit reached ({max_calls}). Continue without spawning.")
+            return _text_result(
+                f"spawn_agent call limit reached ({max_calls}). Continue without spawning."
+            )
 
         objective = params["objective"]
         max_turns = int(params.get("max_turns", 12))
@@ -116,7 +131,10 @@ def create_spawn_agent_tool(
         description="Spawn a focused Drone-style sub-agent for a specific objective.",
         parameters=AgentToolSchema(
             properties={
-                "objective": {"type": "string", "description": "Focused sub-task objective."},
+                "objective": {
+                    "type": "string",
+                    "description": "Focused sub-task objective.",
+                },
                 "max_turns": {
                     "type": "integer",
                     "description": "Maximum turns for the sub-agent run.",

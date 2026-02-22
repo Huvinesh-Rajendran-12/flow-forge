@@ -101,7 +101,7 @@ class MindApiTests(unittest.TestCase):
             }
             yield {"type": "result", "content": {"subtype": "completed"}}
 
-        with patch("backend.mind.orchestrator.run_agent", new=fake_run_agent):
+        with patch("backend.mind.pipeline.run_agent", new=fake_run_agent):
             with self.client.stream(
                 "POST",
                 f"/api/minds/{mind_id}/delegate",
@@ -178,7 +178,7 @@ class MindApiTests(unittest.TestCase):
             yield {"type": "text", "content": f"drone_workspace_leak={leak_detected}"}
             yield {"type": "result", "content": {"subtype": "completed"}}
 
-        with patch("backend.mind.orchestrator.run_agent", new=fake_run_agent):
+        with patch("backend.mind.pipeline.run_agent", new=fake_run_agent):
             with self.client.stream(
                 "POST",
                 f"/api/minds/{mind_id}/delegate",
@@ -212,7 +212,7 @@ class MindApiTests(unittest.TestCase):
                 },
             }
 
-        with patch("backend.mind.orchestrator.run_agent", new=fake_run_agent):
+        with patch("backend.mind.pipeline.run_agent", new=fake_run_agent):
             with self.client.stream(
                 "POST",
                 f"/api/minds/{mind_id}/delegate",
@@ -264,7 +264,7 @@ class MindApiTests(unittest.TestCase):
                 },
             }
 
-        with patch("backend.mind.orchestrator.run_agent", new=fake_run_agent):
+        with patch("backend.mind.pipeline.run_agent", new=fake_run_agent):
             with self.client.stream(
                 "POST",
                 f"/api/minds/{mind_id}/delegate",
@@ -305,7 +305,7 @@ class MindApiTests(unittest.TestCase):
                 },
             }
 
-        with patch("backend.mind.orchestrator.run_agent", new=fake_run_agent):
+        with patch("backend.mind.pipeline.run_agent", new=fake_run_agent):
             with self.client.stream(
                 "POST",
                 f"/api/minds/{mind_id}/delegate",
@@ -349,7 +349,7 @@ class MindApiTests(unittest.TestCase):
                 },
             }
 
-        with patch("backend.mind.orchestrator.run_agent", new=fake_run_agent):
+        with patch("backend.mind.pipeline.run_agent", new=fake_run_agent):
             with self.client.stream(
                 "POST",
                 f"/api/minds/{mind_id}/delegate",
@@ -549,7 +549,7 @@ class MindApiTests(unittest.TestCase):
                 },
             }
 
-        with patch("backend.mind.orchestrator.run_agent", new=fake_run_agent):
+        with patch("backend.mind.pipeline.run_agent", new=fake_run_agent):
             with self.client.stream(
                 "POST",
                 f"/api/minds/{mind_id}/delegate",
@@ -562,7 +562,7 @@ class MindApiTests(unittest.TestCase):
         self.assertIn("Prefer shipping a reversible draft", system_prompt)
         self.assertIn("user_feedback", system_prompt)
 
-    def test_quick_followup_infers_implicit_feedback_without_explicit_rating(self):
+    def test_quick_followup_does_not_infer_implicit_feedback(self):
         create_resp = self.client.post(
             "/api/minds",
             json={"name": "Scout"},
@@ -582,7 +582,7 @@ class MindApiTests(unittest.TestCase):
                 },
             }
 
-        with patch("backend.mind.orchestrator.run_agent", new=fake_run_agent):
+        with patch("backend.mind.pipeline.run_agent", new=fake_run_agent):
             with self.client.stream(
                 "POST",
                 f"/api/minds/{mind_id}/delegate",
@@ -607,26 +607,20 @@ class MindApiTests(unittest.TestCase):
 
         self.assertGreaterEqual(len(captured_prompts), 2)
         second_prompt = captured_prompts[-1]
-        self.assertIn("implicit_feedback", second_prompt)
-        self.assertIn("quick follow-up on a similar task", second_prompt)
+        self.assertNotIn("quick follow-up on a similar task", second_prompt)
 
         memory_context_event = next(
             event for event in second_events if event["type"] == "memory_context"
         )
         context_payload = memory_context_event["content"]
-        self.assertGreaterEqual(context_payload.get("implicit_count", 0), 1)
+        self.assertEqual(context_payload.get("implicit_count", 0), 0)
 
         implicit_resp = self.client.get(
             f"/api/minds/{mind_id}/memory?category=implicit_feedback"
         )
         self.assertEqual(implicit_resp.status_code, 200)
         implicit_memories = implicit_resp.json()
-        self.assertTrue(
-            any(
-                "quick follow-up on a similar task" in memory["content"]
-                for memory in implicit_memories
-            )
-        )
+        self.assertEqual(implicit_memories, [])
 
     def test_delegate_prompt_includes_charter_and_runtime_manifest(self):
         create_resp = self.client.post(
@@ -653,7 +647,7 @@ class MindApiTests(unittest.TestCase):
                 },
             }
 
-        with patch("backend.mind.orchestrator.run_agent", new=fake_run_agent):
+        with patch("backend.mind.pipeline.run_agent", new=fake_run_agent):
             with self.client.stream(
                 "POST",
                 f"/api/minds/{mind_id}/delegate",

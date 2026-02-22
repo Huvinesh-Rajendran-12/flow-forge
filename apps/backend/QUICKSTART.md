@@ -97,7 +97,7 @@ curl -X POST http://localhost:8100/api/minds/<mind_id>/feedback \
 ```
 
 Notes:
-- Explicit feedback is optional. The Mind also infers implicit signals from usage patterns (e.g., rapid similar follow-ups and retry-after-failure behavior).
+- Explicit feedback is optional. The Mind also infers implicit preference signals from profile updates.
 - After each run, the Mind stores an autonomous `mind_insight` memory for future adaptation.
 
 Common event types:

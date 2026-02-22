@@ -116,15 +116,13 @@ SSE events use a typed `Event` envelope: `{"id": ..., "type": ..., "seq": ..., "
 | `mind/events.py` | `Event` model (typed envelope) + `EventStream` wrapper that enriches raw pipeline dicts |
 | `mind/exceptions.py` | Domain exceptions (`MindNotFoundError`, `TaskNotFoundError`, `ValidationError`) |
 | `mind/schema.py` | `MindProfile`, `Task`, `MemoryEntry` models |
+| `mind/config.py` | Centralized Mind runtime limits and defaults |
 | `mind/pipeline.py` | `delegate_to_mind()` — task run orchestration and persistence |
 | `mind/reasoning.py` | Mind system prompt composition + agent execution |
 | `mind/tools/factory.py` | Per-run tool assembly for Mind execution |
 | `mind/tools/primitives.py` | `memory_save`, `memory_search`, `spawn_agent` tools |
 | `mind/store.py` | SQLite persistence for Mind profiles, tasks, and traces |
 | `mind/memory.py` | SQLite FTS-backed memory retrieval and storage |
-| `connectors/__init__.py` | `create_service_layer()` / `close_service_layer()` — connector routing and `_http_client` lifecycle cleanup |
-| `connectors/registry.py` | `ConnectorRegistry` — discovers built-in + custom connectors; falls back to custom file if built-in fails |
-| `connectors/builder/` | Agent-driven connector generation + two-stage validation (AST + subprocess, enforces `@classmethod`) |
 
 ### Mind Data Model
 
